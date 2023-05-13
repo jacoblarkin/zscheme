@@ -78,6 +78,16 @@ pub const Token = struct {
     column: usize,
     position: usize,
     value: TokenValue,
+
+    pub fn default() Token {
+        return Token{
+            .contents = "",
+            .line = 0,
+            .column = 0,
+            .position = 0,
+            .value = TokenValue{ .EndOfFile = {} },
+        };
+    }
 };
 
 pub const LexError = error{
