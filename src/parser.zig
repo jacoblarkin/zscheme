@@ -44,8 +44,8 @@ pub const Expression = union(ExpressionTag) {
 };
 
 pub const ConsCell = struct {
-    Car: *Expression,
-    Cdr: *Expression,
+    Car: *const Expression,
+    Cdr: *const Expression,
 };
 
 pub const Parser = struct {
