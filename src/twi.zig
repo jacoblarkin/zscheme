@@ -30,7 +30,7 @@ pub const LispVal = union(LispValTag) {
     Cons: ConsStruct,
     Vector: std.ArrayList(LispVal),
     ByteVector: std.ArrayList(u8),
-    Func: *LispFunc,
+    Func: LispFunc,
 
     fn plusInteger(val: *LispVal, other: i64) LispVal {
         switch (val.*) {
@@ -39,6 +39,24 @@ pub const LispVal = union(LispValTag) {
                 std.debug.print("Runtime Error: can only add integers.\n", .{});
                 return val.*;
             },
+        }
+    }
+
+    pub fn print(val: LispVal) void {
+        switch (val) {
+            .Nil => std.debug.print("Nil", .{}),
+            .Bool => |b| std.debug.print("{d}", .{@boolToInt(b)}),
+            .Char => |c| std.debug.print("{c}", .{c}),
+            .Integer => |i| std.debug.print("{d}", .{i}),
+            .Rational => |r| std.debug.print("{d}/{d}", .{ r[0], r[1] }),
+            .Real => |r| std.debug.print("{d}", .{r}),
+            .Complex => |c| std.debug.print("{d} + {d}i", .{ c[0], c[1] }),
+            .String => |s| std.debug.print("\"{s}\"", .{s}),
+            .Symbol => |s| std.debug.print("{s}", .{s}),
+            .Cons => std.debug.print("<cons>", .{}),
+            .Vector => std.debug.print("<vector>", .{}),
+            .ByteVector => std.debug.print("<bytevector>", .{}),
+            .Func => std.debug.print("<function>", .{}),
         }
     }
 };
@@ -50,7 +68,7 @@ pub const ConsStruct = struct {
 
 pub const LispFunc = struct {
     arity: ?usize,
-    func: fn (ConsStruct) LispVal,
+    func: *const fn (ConsStruct) LispVal,
 };
 
 var NilVal = LispVal{ .Nil = {} };
@@ -80,8 +98,9 @@ pub const Interpreter = struct {
 
     pub fn init(allocator: std.mem.Allocator) !Interpreter {
         var values = std.StringHashMap(LispVal).init(allocator);
-        var plusPtr = try allocator.create(LispFunc);
-        plusPtr.* = LispFunc{ .arity = null, .func = plus };
+        //var plusPtr = try allocator.create(LispFunc);
+        //plusPtr.* = LispFunc{ .arity = null, .func = plus };
+        var plusPtr = LispFunc{ .arity = null, .func = plus };
         try values.put("+", LispVal{ .Func = plusPtr });
         //try values.put("-", LispVal{ .Func = LispFunc{ .arity = null, .func = minus}});
         //try values.put("*", LispVal{ .Func = LispFunc{ .arity = null, .func = times}});
@@ -154,7 +173,8 @@ fn interpretCons(interpreter: *Interpreter, expr: *const parser.Expression) Lisp
 }
 
 fn apply(interpreter: *Interpreter, funcVal: LispVal, args: *const parser.Expression) LispVal {
-    var func = funcVal.Func.*;
+    //var func = funcVal.Func.*;
+    var func = funcVal.Func;
     var arguments = args;
     var empty: ConsStruct = ConsStruct{
         .Car = &NilVal,
@@ -172,7 +192,6 @@ fn apply(interpreter: *Interpreter, funcVal: LispVal, args: *const parser.Expres
                     current.Cdr.* = LispVal{ .Cons = empty };
                     current = &current.Cdr.Cons;
                 }
-                std.debug.print("Arg: {s}", .{arguments});
                 current.Car = interpreter.allocator.create(LispVal) catch {
                     return LispVal{ .Nil = {} };
                 };

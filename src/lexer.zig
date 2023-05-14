@@ -136,6 +136,26 @@ pub const Lexer = struct {
         };
     }
 
+    pub fn initRepl(allocator: std.mem.Allocator) Lexer {
+        return Lexer{
+            .filename = "",
+            .allocator = allocator,
+            .contents = "",
+            .contents_iter = std.unicode.Utf8View.initUnchecked("").iterator(),
+            .line = 0,
+            .column = 1,
+            .position = 0,
+        };
+    }
+
+    pub fn replLine(lexer: *Lexer, contents: []const u8) !void {
+        lexer.contents = contents;
+        lexer.contents_iter = (try std.unicode.Utf8View.init(contents)).iterator();
+        lexer.line += 1;
+        lexer.column = 1;
+        lexer.position = 0;
+    }
+
     pub fn deinit(l: *Lexer) void {
         l.allocator.free(l.contents);
     }
@@ -519,11 +539,11 @@ fn boolean(l: *Lexer) !TokenValue {
     {
         return LexError.NotBool;
     }
-    if (boolCandidate.len >= 5 and boolCandidate[1..5] == "true") {
+    if (boolCandidate.len >= 5 and std.mem.eql(u8, boolCandidate[1..5], "true")) {
         try l.forward(5);
         return TokenValue{ .BoolLiteral = true };
     }
-    if (boolCandidate.len >= 6 and boolCandidate[1..6] == "false") {
+    if (boolCandidate.len >= 6 and std.mem.eql(u8, boolCandidate[1..6], "false")) {
         try l.forward(6);
         return TokenValue{ .BoolLiteral = false };
     }
@@ -1499,10 +1519,10 @@ fn infnan(l: *Lexer) !usize {
     if (possible.len != 6 or !sign(possible[0])) {
         return 0;
     }
-    if (possible[1..4] != "inf" and possible[1..4] != "nan") {
+    if (!std.mem.eql(u8, possible[1..4], "inf") and !std.mem.eql(u8, possible[1..4], "nan")) {
         return 0;
     }
-    if (possible[4..6] != ".0") {
+    if (!std.mem.eql(u8, possible[4..6], ".0")) {
         return 0;
     }
     try l.forward(6);

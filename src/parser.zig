@@ -55,7 +55,10 @@ pub const Parser = struct {
     peekedToken: ?lex.Token = null,
 
     pub fn init(allocator: std.mem.Allocator, filename: []const u8) !Parser {
-        var lexer = try lex.Lexer.init(allocator, filename);
+        var lexer = if (filename.len > 0)
+            try lex.Lexer.init(allocator, filename)
+        else
+            lex.Lexer.initRepl(allocator);
         return Parser{ .lexer = lexer, .allocator = allocator, .hadError = false };
     }
 
@@ -68,9 +71,10 @@ pub const Parser = struct {
             return tok;
         }
         var tok: lex.Token = while (true) {
-            var ret = parser.lexer.getNextToken() catch |err| {
+            //var ret = parser.lexer.getNextToken() catch |err| {
+            var ret = parser.lexer.getNextToken() catch {
                 parser.hadError = true;
-                std.debug.print("{s}\n", .{err});
+                //std.debug.print("{s}\n", .{err});
                 continue;
             };
             break ret;
@@ -85,9 +89,10 @@ pub const Parser = struct {
             return tok;
         }
         while (true) {
-            var ret = parser.lexer.getNextToken() catch |err| {
+            //var ret = parser.lexer.getNextToken() catch |err| {
+            var ret = parser.lexer.getNextToken() catch {
                 parser.hadError = true;
-                std.debug.print("{s}\n", .{err});
+                //std.debug.print("{s}\n", .{err});
                 continue;
             };
             return ret;
@@ -96,15 +101,13 @@ pub const Parser = struct {
 
     pub fn parse(parser: *Parser) ?*Expression {
         return parseExpr(parser, QuoteTag.NoQuote);
+    }
 
-        //while (true) {
-        //    var tok: lex.Token = parser.next();
-        //    std.debug.print("{s}\n", .{tok});
-        //    if (tok.value == lex.TokenValue.EndOfFile) {
-        //        break;
-        //    }
-        //}
-        //return null;
+    pub fn parseRepl(parser: *Parser, contents: []const u8) ?*Expression {
+        parser.lexer.replLine(contents) catch {
+            return null;
+        };
+        return parseExpr(parser, QuoteTag.NoQuote);
     }
 
     fn printError(parser: *Parser, msg: []const u8, tok: lex.Token) void {
