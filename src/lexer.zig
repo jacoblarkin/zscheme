@@ -73,6 +73,7 @@ pub const TokenValue = union(TokenTag) {
 };
 
 pub const Token = struct {
+    filename: []const u8,
     contents: []const u8,
     line: usize,
     column: usize,
@@ -107,6 +108,7 @@ pub const LexError = error{
     NotIdentifier,
     UnexpectedEndOfFile,
     InvalidToken,
+    UnclosedNestedComment,
 };
 
 pub const Lexer = struct {
@@ -198,8 +200,8 @@ pub const Lexer = struct {
     }
 
     pub fn getNextToken(l: *Lexer) !Token {
-        // TODO: Skip Whitespace and Comments
         var tok: Token = Token{
+            .filename = l.filename,
             .contents = "",
             .line = l.line,
             .column = l.column,
@@ -306,6 +308,11 @@ pub const Lexer = struct {
                         tok.contents = try l.contents_back(l.position - tok.position);
                         return tok;
                     },
+                    '|' => {
+                        tok.value = try comment(l, true);
+                        tok.contents = try l.contents_back(l.position - tok.position);
+                        return tok;
+                    },
                     'u' => {
                         var firstFour: []const u8 = l.peek(4);
                         if (firstFour.len != 4 or !std.mem.eql(u8, firstFour, "#u8(")) {
@@ -357,6 +364,20 @@ pub const Lexer = struct {
 
 fn comment(l: *Lexer, nested: bool) !TokenValue {
     if (nested) {
+        try l.forward(2);
+        var ch = try l.next(1);
+        if (ch.len < 1) {
+            return LexError.UnclosedNestedComment;
+        }
+        var nesting: usize = 1;
+        var state: i2 = if (ch[0] == '|') 1 else if (ch[0] == '#') -1 else 0;
+        while (nesting > 0) {
+            ch = try l.next(1);
+            if (ch.len < 1) return LexError.UnclosedNestedComment;
+            if (state > 0 and ch[0] == '#') nesting -= 1;
+            if (state < 0 and ch[0] == '|') nesting += 1;
+            state = if (ch[0] == '|') 1 else if (ch[0] == '#') -1 else 0;
+        }
         return LexError.InvalidToken;
     }
     var count: usize = 0;
