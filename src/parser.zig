@@ -71,10 +71,9 @@ pub const Parser = struct {
             return tok;
         }
         var tok: lex.Token = while (true) {
-            //var ret = parser.lexer.getNextToken() catch |err| {
-            var ret = parser.lexer.getNextToken() catch {
+            var ret = parser.lexer.getNextToken() catch |err| {
                 parser.hadError = true;
-                //std.debug.print("{s}\n", .{err});
+                std.debug.print("{s}\n", .{lex.Lexer.errorMsg(err)});
                 continue;
             };
             break ret;
@@ -89,10 +88,9 @@ pub const Parser = struct {
             return tok;
         }
         while (true) {
-            //var ret = parser.lexer.getNextToken() catch |err| {
-            var ret = parser.lexer.getNextToken() catch {
+            var ret = parser.lexer.getNextToken() catch |err| {
                 parser.hadError = true;
-                //std.debug.print("{s}\n", .{err});
+                std.debug.print("{s}\n", .{lex.Lexer.errorMsg(err)});
                 continue;
             };
             return ret;

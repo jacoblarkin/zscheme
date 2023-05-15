@@ -64,6 +64,7 @@ pub const Token = struct {
 
     pub fn default() Token {
         return Token{
+            .filename = "",
             .contents = "",
             .line = 0,
             .column = 0,
@@ -129,6 +130,29 @@ pub const Lexer = struct {
             .line = 0,
             .column = 1,
             .position = 0,
+        };
+    }
+
+    pub fn errorMsg(err: anyerror) []const u8 {
+        return switch (err) {
+            LexError.RanOutOfCodepoints => "Lexing Error: Ran out of codepoints",
+            LexError.ExpectedSuffix => "Lexing Error: Expected suffix",
+            LexError.ExpectedNumeralAfterDecPt => "Lexing Error: Expected numeral after decimal point",
+            LexError.ExpectedNumeralAfterSlash => "Lexing Error: Expected numeral after slash",
+            LexError.RequestLargerThanPosition => "Lexing Error: Request larger than position in file",
+            LexError.ExpectedI => "Lexing Error: Expected imaginary 'i'",
+            LexError.ExpectedQuote => "Lexing Error: Expected quote '\"'",
+            LexError.ExpectedEscapedChar => "Lexing Error: Expected escaped char",
+            LexError.ExpectedHexValue => "Lexing Error: Expected hexadecimal value",
+            LexError.NotValidEscape => "Lexing Error: Not a valid escape sequence",
+            LexError.ExpectedCharacter => "Lexing Error: Expected character",
+            LexError.NotChar => "Lexing Error: Not a characted",
+            LexError.NotBool => "Lexing Error: Not a bool",
+            LexError.NotIdentifier => "Lexing Error: Not an identifier",
+            LexError.UnexpectedEndOfFile => "Lexing Error: Unexpected end of file",
+            LexError.InvalidToken => "Lexing Error: Invalid token",
+            LexError.UnclosedNestedComment => "Lexing Error: Unclosed nested comment",
+            else => "Other error!",
         };
     }
 
