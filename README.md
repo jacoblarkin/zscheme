@@ -1,18 +1,31 @@
 # zscheme
 
-[r<sup>7</sup>rs](r7rs.org) scheme implemetation in [zig](ziglang.org).
+[r<sup>7</sup>rs](https://github.com/johnwcowan/r7rs-work/blob/master/R7RSHomePage.md) scheme implemetation in [zig](https://ziglang.org).
+
+Current status: 
+- r7rs lexer based on section 7.1.1 of [r7rs spec](https://github.com/johnwcowan/r7rs-spec/blob/errata/spec/r7rs.pdf)
+- parser with exception of `(a . b)` and `(a b c d . e)` expressions
+- addition of integers in a tree-walk-interpreter.
 
 # TODO
 
 This section is incomplete and just of list of things to implement in roughly the order I expect to implement them in.
 
 - [x] Lexer
-  - [ ] Nested Comments
+  - [x] Nested Comments
+  - [ ] Tests
+  - [ ] Simplification?
 - [x] Parser
-- [ ] Interpreter
+  - [ ] Cons and improper lists
+  - [ ] Tests
+- [x] Tree-Walk-Interpreter
+  - [x] Addition of integers
   - [ ] Simple Expressions
+  - [ ] Big-Ints
+  - [ ] Garbage Collector
   - [ ] Lambdas
   - [ ] Syntax-rules
-
-Not listed above is fixing all the memory leaks currently in the prototype interpreter.
-Switching to a garbage collector for the main allocator should help with this, but probably isn't the optimal solution.
+  - [ ] r7rs records
+  - [ ] r7rs libraries
+- [ ] Bytecode Interpreter
+- [ ] Native compiler?
