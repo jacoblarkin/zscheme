@@ -92,6 +92,7 @@ pub const LexError = error{
     UnexpectedEndOfFile,
     InvalidToken,
     UnclosedNestedComment,
+    ExpectedDelimeter,
 };
 
 pub const Lexer = struct {
@@ -158,6 +159,7 @@ pub const Lexer = struct {
             LexError.UnexpectedEndOfFile => "Lexing Error: Unexpected end of file",
             LexError.InvalidToken => "Lexing Error: Invalid token",
             LexError.UnclosedNestedComment => "Lexing Error: Unclosed nested comment",
+            LexError.ExpectedDelimeter => "Lexing Error: Expected delimeter at the end of token",
             else => "Other error!",
         };
     }
@@ -276,15 +278,13 @@ pub const Lexer = struct {
                     try l.forward(1);
                     tok.value = TokenValue{ .Cons = {} };
                     tok.contents = first;
-                    return tok;
                 } else if (digit(firstTwo[1])) {
                     tok.value = try number(l);
                     tok.contents = try l.contents_back(l.position - tok.position);
-                    return tok;
+                } else {
+                    tok.value = try identifier(l);
+                    tok.contents = try l.contents_back(l.position - tok.position);
                 }
-                tok.value = try identifier(l);
-                tok.contents = try l.contents_back(l.position - tok.position);
-                return tok;
             },
             ',' => {
                 var firstTwo: []const u8 = l.peek(2);
@@ -292,11 +292,11 @@ pub const Lexer = struct {
                     try l.forward(2);
                     tok.value = TokenValue{ .CommaAt = {} };
                     tok.contents = firstTwo;
-                    return tok;
+                } else {
+                    try l.forward(1);
+                    tok.value = TokenValue{ .Comma = {} };
+                    tok.contents = first;
                 }
-                try l.forward(1);
-                tok.value = TokenValue{ .Comma = {} };
-                tok.contents = first;
                 return tok;
             },
             ';' => {
@@ -319,12 +319,10 @@ pub const Lexer = struct {
                     't', 'f' => {
                         tok.value = try boolean(l);
                         tok.contents = try l.contents_back(l.position - tok.position);
-                        return tok;
                     },
                     '\\' => {
                         tok.value = try character(l);
                         tok.contents = try l.contents_back(l.position - tok.position);
-                        return tok;
                     },
                     '|' => {
                         tok.value = try comment(l, true);
@@ -344,7 +342,6 @@ pub const Lexer = struct {
                     'i', 'e', 'b', 'o', 'd', 'x' => {
                         tok.value = try number(l);
                         tok.contents = try l.contents_back(l.position - tok.position);
-                        return tok;
                     },
                     else => return LexError.InvalidToken,
                 }
@@ -352,33 +349,39 @@ pub const Lexer = struct {
             '"' => {
                 tok.value = try string(l);
                 tok.contents = try l.contents_back(l.position - tok.position);
-                return tok;
             },
             '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' => {
                 tok.value = try number(l);
                 tok.contents = try l.contents_back(l.position - tok.position);
-                return tok;
             },
             '+', '-' => {
                 var firstTwo: []const u8 = l.peek(2);
                 if (firstTwo.len == 2 and digit(firstTwo[1])) {
                     tok.value = try number(l);
                     tok.contents = try l.contents_back(l.position - tok.position);
-                    return tok;
+                } else {
+                    tok.value = identifier(l) catch try number(l);
+                    tok.contents = try l.contents_back(l.position - tok.position);
                 }
-                tok.value = identifier(l) catch try number(l);
-                tok.contents = try l.contents_back(l.position - tok.position);
-                return tok;
             },
             else => {
                 tok.value = try identifier(l);
                 tok.contents = try l.contents_back(l.position - tok.position);
-                return tok;
             },
         }
-        return LexError.InvalidToken;
+        var del: []const u8 = l.peek(1);
+        if (del.len > 0 and !delimeter(del[0])) {
+            std.debug.print("Delimeter: {s}\n", .{del});
+            return LexError.ExpectedDelimeter;
+        }
+        return tok;
     }
 };
+
+fn delimeter(c: u8) bool {
+    return whitespace(c) or c == ';' or c == '(' or c == '|' or
+        c == ')' or c == '"' or c == ';';
+}
 
 fn comment(l: *Lexer, nested: bool) !TokenValue {
     if (nested) {
