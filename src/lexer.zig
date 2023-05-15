@@ -1,16 +1,10 @@
 const std = @import("std");
 
 pub const TokenTag = enum {
-    BinaryIntLiteral,
-    BinaryRatLiteral,
     BoolLiteral,
     CharLiteral,
     ComplexLiteral,
-    HexIntLiteral,
-    HexRatLiteral,
     IntegerLiteral,
-    OctIntLiteral,
-    OctRatLiteral,
     RationalLiteral,
     RealLiteral,
     StringLiteral,
@@ -29,16 +23,10 @@ pub const TokenTag = enum {
 };
 
 pub const TokenValue = union(TokenTag) {
-    BinaryIntLiteral: i64,
-    BinaryRatLiteral: [2]i64,
     BoolLiteral: bool,
     CharLiteral: u8,
     ComplexLiteral: [2]f64,
-    HexIntLiteral: i64,
-    HexRatLiteral: [2]i64,
     IntegerLiteral: i64,
-    OctIntLiteral: i64,
-    OctRatLiteral: [2]i64,
     RationalLiteral: [2]i64,
     RealLiteral: f64,
     StringLiteral: []const u8,
@@ -57,12 +45,6 @@ pub const TokenValue = union(TokenTag) {
 
     fn negate(self: *TokenValue) void {
         switch (self.*) {
-            TokenValue.BinaryIntLiteral => |v| self.BinaryIntLiteral = -1 * v,
-            TokenValue.BinaryRatLiteral => |v| self.BinaryRatLiteral = [2]i64{ -1 * v[0], v[1] },
-            TokenValue.OctIntLiteral => |v| self.OctIntLiteral = -1 * v,
-            TokenValue.OctRatLiteral => |v| self.OctRatLiteral = [2]i64{ -1 * v[0], v[1] },
-            TokenValue.HexIntLiteral => |v| self.HexIntLiteral = -1 * v,
-            TokenValue.HexRatLiteral => |v| self.HexRatLiteral = [2]i64{ -1 * v[0], v[1] },
             TokenValue.IntegerLiteral => |v| self.IntegerLiteral = -1 * v,
             TokenValue.RationalLiteral => |v| self.RationalLiteral = [2]i64{ -1 * v[0], v[1] },
             TokenValue.RealLiteral => |v| self.RealLiteral = -1 * v,
@@ -492,7 +474,7 @@ fn symbol_identifier(l: *Lexer) !usize {
                     count += 1;
                     try l.forward(1);
                     var hexseq = l.peek(2);
-                    if (hexseq.len != 2 or !digit16(hexseq[0]) or !digit16(hexseq[1])) {
+                    if (hexseq.len != 2 or !digitN(16, hexseq[0]) or !digitN(16, hexseq[1])) {
                         return LexError.ExpectedHexValue;
                     }
                     count += 2;
@@ -783,28 +765,18 @@ fn whitespace(c: u8) bool {
 
 fn number(l: *Lexer) !TokenValue {
     // TODO: Reinterpret literals based on exactness prefix
-    var pre: usize = try prefix2(l);
-    if (pre != 0) {
-        return complex2(l);
+    const bases = [4]i8{ 2, 8, 16, 10 }; // 10 should be last here
+    inline for (bases) |n| {
+        var pre: usize = try prefix(n, l);
+        if (pre != 0) return complex(n, l);
     }
-    pre = try prefix8(l);
-    if (pre != 0) {
-        return complex8(l);
-    }
-    pre = try prefix16(l);
-    if (pre != 0) {
-        return complex16(l);
-    }
-    // Ignore prefix10 for now (See TODO above)
-    _ = try prefix10(l);
-    return complex10(l);
+    return complex(10, l);
 }
 
-fn complex2(l: *Lexer) !TokenValue {
+fn complex(comptime n: i8, l: *Lexer) !TokenValue {
     var imag_only = l.peek(2);
     if (imag_only.len == 2) {
         if ((imag_only[0] == '+' or imag_only[0] == '-') and imag_only[1] == 'i') {
-            try l.forward(2);
             var sign_f: f64 = 1.0;
             if (imag_only[0] == '-') {
                 sign_f = -1.0;
@@ -815,7 +787,7 @@ fn complex2(l: *Lexer) !TokenValue {
             } };
         }
     }
-    var tok_real: TokenValue = try real2(l);
+    var tok_real: TokenValue = try realN(n, l);
     var next_c: []const u8 = l.peek(1);
     if (next_c.len != 1) {
         return tok_real;
@@ -823,169 +795,7 @@ fn complex2(l: *Lexer) !TokenValue {
     switch (next_c[0]) {
         '@' => {
             try l.forward(1);
-            var tok_exp: TokenValue = try real2(l);
-            var coeff: f64 = switch (tok_real) {
-                TokenTag.BinaryIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.BinaryRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            var angle: f64 = switch (tok_exp) {
-                TokenTag.BinaryIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.BinaryRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                coeff * std.math.cos(angle),
-                coeff * std.math.sin(angle),
-            } };
-        },
-        '+', '-' => {
-            var tok_imag: TokenValue = try real2(l);
-            var i_: []const u8 = l.peek(1);
-            if (i_.len != 1 or i_[0] != 'i') {
-                return LexError.ExpectedI;
-            }
-            try l.forward(1);
-            var real: f64 = switch (tok_real) {
-                TokenTag.BinaryIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.BinaryRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            var imag: f64 = switch (tok_imag) {
-                TokenTag.BinaryIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.BinaryRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                real, imag,
-            } };
-        },
-        'i' => {
-            try l.forward(1);
-            var imag: f64 = switch (tok_real) {
-                TokenTag.BinaryIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.BinaryRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                0.0,
-                imag,
-            } };
-        },
-        else => return tok_real,
-    }
-}
-
-fn complex8(l: *Lexer) !TokenValue {
-    var imag_only = l.peek(2);
-    if (imag_only.len == 2) {
-        if ((imag_only[0] == '+' or imag_only[0] == '-') and imag_only[1] == 'i') {
-            try l.forward(2);
-            var sign_f: f64 = 1.0;
-            if (imag_only[0] == '-') {
-                sign_f = -1.0;
-            }
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                0,
-                sign_f,
-            } };
-        }
-    }
-    var tok_real: TokenValue = try real8(l);
-    var next_c: []const u8 = l.peek(1);
-    if (next_c.len != 1) {
-        return tok_real;
-    }
-    switch (next_c[0]) {
-        '@' => {
-            try l.forward(1);
-            var tok_exp: TokenValue = try real8(l);
-            var coeff: f64 = switch (tok_real) {
-                TokenTag.OctIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.OctRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            var angle: f64 = switch (tok_exp) {
-                TokenTag.OctIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.OctRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                coeff * std.math.cos(angle),
-                coeff * std.math.sin(angle),
-            } };
-        },
-        '+', '-' => {
-            var tok_imag: TokenValue = try real8(l);
-            var i_: []const u8 = l.peek(1);
-            if (i_.len != 1 or i_[0] != 'i') {
-                return LexError.ExpectedI;
-            }
-            try l.forward(1);
-            var real: f64 = switch (tok_real) {
-                TokenTag.OctIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.OctRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            var imag: f64 = switch (tok_imag) {
-                TokenTag.OctIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.OctRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                real, imag,
-            } };
-        },
-        'i' => {
-            try l.forward(1);
-            var imag: f64 = switch (tok_real) {
-                TokenTag.OctIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.OctRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                0.0,
-                imag,
-            } };
-        },
-        else => return tok_real,
-    }
-}
-
-fn complex10(l: *Lexer) !TokenValue {
-    var imag_only = l.peek(2);
-    if (imag_only.len == 2) {
-        if ((imag_only[0] == '+' or imag_only[0] == '-') and imag_only[1] == 'i') {
-            try l.forward(2);
-            var sign_f: f64 = 1.0;
-            if (imag_only[0] == '-') {
-                sign_f = -1.0;
-            }
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                0,
-                sign_f,
-            } };
-        }
-    }
-    var tok_real: TokenValue = try real10(l);
-    var next_c: []const u8 = l.peek(1);
-    if (next_c.len != 1) {
-        return tok_real;
-    }
-    switch (next_c[0]) {
-        '@' => {
-            try l.forward(1);
-            var tok_exp: TokenValue = try real10(l);
+            var tok_exp: TokenValue = try realN(n, l);
             var coeff: f64 = switch (tok_real) {
                 TokenTag.IntegerLiteral => |val| @intToFloat(f64, val),
                 TokenTag.RationalLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
@@ -1004,7 +814,7 @@ fn complex10(l: *Lexer) !TokenValue {
             } };
         },
         '+', '-' => {
-            var tok_imag: TokenValue = try real10(l);
+            var tok_imag: TokenValue = try realN(n, l);
             var i_: []const u8 = l.peek(1);
             if (i_.len != 1 or i_[0] != 'i') {
                 return LexError.ExpectedI;
@@ -1043,87 +853,7 @@ fn complex10(l: *Lexer) !TokenValue {
     }
 }
 
-fn complex16(l: *Lexer) !TokenValue {
-    var imag_only = l.peek(2);
-    if (imag_only.len == 2) {
-        if ((imag_only[0] == '+' or imag_only[0] == '-') and imag_only[1] == 'i') {
-            var sign_f: f64 = 1.0;
-            if (imag_only[0] == '-') {
-                sign_f = -1.0;
-            }
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                0,
-                sign_f,
-            } };
-        }
-    }
-    var tok_real: TokenValue = try real16(l);
-    var next_c: []const u8 = l.peek(1);
-    if (next_c.len != 1) {
-        return tok_real;
-    }
-    switch (next_c[0]) {
-        '@' => {
-            try l.forward(1);
-            var tok_exp: TokenValue = try real16(l);
-            var coeff: f64 = switch (tok_real) {
-                TokenTag.HexIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.HexRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            var angle: f64 = switch (tok_exp) {
-                TokenTag.HexIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.HexRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                coeff * std.math.cos(angle),
-                coeff * std.math.sin(angle),
-            } };
-        },
-        '+', '-' => {
-            var tok_imag: TokenValue = try real16(l);
-            var i_: []const u8 = l.peek(1);
-            if (i_.len != 1 or i_[0] != 'i') {
-                return LexError.ExpectedI;
-            }
-            try l.forward(1);
-            var real: f64 = switch (tok_real) {
-                TokenTag.HexIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.HexRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            var imag: f64 = switch (tok_imag) {
-                TokenTag.HexIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.HexRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                real, imag,
-            } };
-        },
-        'i' => {
-            try l.forward(1);
-            var imag: f64 = switch (tok_real) {
-                TokenTag.HexIntLiteral => |val| @intToFloat(f64, val),
-                TokenTag.HexRatLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
-                TokenTag.RealLiteral => |val| val,
-                else => unreachable,
-            };
-            return TokenValue{ .ComplexLiteral = [2]f64{
-                0.0,
-                imag,
-            } };
-        },
-        else => return tok_real,
-    }
-}
-
-fn real2(l: *Lexer) !TokenValue {
+fn realN(comptime n: i8, l: *Lexer) !TokenValue {
     var infnan_: usize = try infnan(l);
     if (infnan_ != 0) {
         var infnan_str = try l.contents_back(infnan_);
@@ -1148,159 +878,15 @@ fn real2(l: *Lexer) !TokenValue {
     if (sign(sign_[0])) {
         try l.forward(1);
     }
-    var ureal_tok = try ureal2(l);
+    var ureal_tok = try ureal(n, l);
     if (minus) {
         ureal_tok.negate();
     }
     return ureal_tok;
 }
 
-fn real8(l: *Lexer) !TokenValue {
-    var infnan_: usize = try infnan(l);
-    if (infnan_ != 0) {
-        var infnan_str = try l.contents_back(infnan_);
-        var minus: bool = infnan_str[0] == '-';
-        var inf: bool = infnan_str[1] == 'i';
-        var val: f64 = 0;
-        if (inf) {
-            val = std.math.inf(f64);
-        } else {
-            val = std.math.nan(f64);
-        }
-        if (minus) {
-            val *= -1;
-        }
-        return TokenValue{ .RealLiteral = val };
-    }
-    var sign_: []const u8 = l.peek(1);
-    if (sign_.len == 0) {
-        return LexError.ExpectedCharacter;
-    }
-    var minus: bool = sign_[0] == '-';
-    if (sign(sign_[0])) {
-        try l.forward(1);
-    }
-    var ureal_tok = try ureal8(l);
-    if (minus) {
-        ureal_tok.negate();
-    }
-    return ureal_tok;
-}
-
-fn real10(l: *Lexer) !TokenValue {
-    var infnan_: usize = try infnan(l);
-    if (infnan_ != 0) {
-        var infnan_str = try l.contents_back(infnan_);
-        var minus: bool = infnan_str[0] == '-';
-        var inf: bool = infnan_str[1] == 'i';
-        var val: f64 = 0;
-        if (inf) {
-            val = std.math.inf(f64);
-        } else {
-            val = std.math.nan(f64);
-        }
-        if (minus) {
-            val *= -1;
-        }
-        return TokenValue{ .RealLiteral = val };
-    }
-    var sign_: []const u8 = l.peek(1);
-    if (sign_.len == 0) {
-        return LexError.ExpectedCharacter;
-    }
-    var minus: bool = sign_[0] == '-';
-    if (sign(sign_[0])) {
-        try l.forward(1);
-    }
-    var ureal_tok = try ureal10(l);
-    if (minus) {
-        ureal_tok.negate();
-    }
-    return ureal_tok;
-}
-
-fn real16(l: *Lexer) !TokenValue {
-    var infnan_: usize = try infnan(l);
-    if (infnan_ != 0) {
-        var infnan_str = try l.contents_back(infnan_);
-        var minus: bool = infnan_str[0] == '-';
-        var inf: bool = infnan_str[1] == 'i';
-        var val: f64 = 0;
-        if (inf) {
-            val = std.math.inf(f64);
-        } else {
-            val = std.math.nan(f64);
-        }
-        if (minus) {
-            val *= -1;
-        }
-        return TokenValue{ .RealLiteral = val };
-    }
-    var sign_: []const u8 = l.peek(1);
-    if (sign_.len == 0) {
-        return LexError.ExpectedCharacter;
-    }
-    var minus: bool = sign_[0] == '-';
-    if (sign(sign_[0])) {
-        try l.forward(1);
-    }
-    var ureal_tok = try ureal16(l);
-    if (minus) {
-        ureal_tok.negate();
-    }
-    return ureal_tok;
-}
-
-fn ureal2(l: *Lexer) !TokenValue {
-    var int_part: usize = try uinteger2(l);
-    var slash: []const u8 = l.peek(1);
-    var found_slash: bool = false;
-    var den_count: usize = 0;
-    if (slash.len == 1 and slash[0] == '/') {
-        found_slash = true;
-        try l.forward(1);
-        den_count += 1;
-        den_count += try uinteger2(l);
-        if (den_count == 1) {
-            return LexError.ExpectedNumeralAfterSlash;
-        }
-    }
-    var lit_val: []const u8 = try l.contents_back(int_part + den_count);
-    if (found_slash) {
-        return TokenValue{ .BinaryRatLiteral = [2]i64{
-            try std.fmt.parseInt(i64, lit_val[0..int_part], 2),
-            try std.fmt.parseInt(i64, lit_val[(int_part + 1)..lit_val.len], 2),
-        } };
-    }
-    return TokenValue{ .BinaryIntLiteral = try std.fmt.parseInt(i64, lit_val, 2) };
-}
-
-fn ureal8(l: *Lexer) !TokenValue {
-    var int_part: usize = try uinteger8(l);
-    var slash: []const u8 = l.peek(1);
-    var found_slash: bool = false;
-    var den_count: usize = 0;
-    if (slash.len == 1 and slash[0] == '/') {
-        found_slash = true;
-        try l.forward(1);
-        den_count += 1;
-        den_count += try uinteger8(l);
-        if (den_count == 1) {
-            return LexError.ExpectedNumeralAfterSlash;
-        }
-    }
-    var lit_val: []const u8 = try l.contents_back(int_part + den_count);
-    if (found_slash) {
-        return TokenValue{ .OctRatLiteral = [2]i64{
-            try std.fmt.parseInt(i64, lit_val[0..int_part], 8),
-            try std.fmt.parseInt(i64, lit_val[(int_part + 1)..lit_val.len], 8),
-        } };
-    }
-    return TokenValue{ .OctIntLiteral = try std.fmt.parseInt(i64, lit_val, 8) };
-}
-
-fn ureal10(l: *Lexer) !TokenValue {
-    var int_part: usize = try uinteger10(l);
+fn ureal(comptime n: i8, l: *Lexer) !TokenValue {
+    var int_part: usize = try uinteger(n, l);
     var slashdec: []const u8 = l.peek(1);
     var den_count: usize = 0;
     var slash: bool = false;
@@ -1308,21 +894,21 @@ fn ureal10(l: *Lexer) !TokenValue {
         try l.forward(1);
         den_count += 1;
         slash = true;
-        den_count += try uinteger10(l);
+        den_count += try uinteger(n, l);
         if (den_count == 1) {
             return LexError.ExpectedNumeralAfterSlash;
         }
-    } else if (slashdec.len == 1 and slashdec[0] == '.') {
+    } else if (n == 10 and slashdec.len == 1 and slashdec[0] == '.') {
         den_count += 1;
         try l.forward(1);
         if (int_part == 0) {
-            den_count += try uinteger10(l);
+            den_count += try uinteger(n, l);
             if (den_count == 1) {
                 return LexError.ExpectedNumeralAfterDecPt;
             }
         } else {
             var dig: []const u8 = l.peek(1);
-            while (dig.len == 1 and digit10(dig[0])) {
+            while (dig.len == 1 and digitN(n, dig[0])) {
                 try l.forward(1);
                 den_count += 1;
                 dig = l.peek(1);
@@ -1336,50 +922,26 @@ fn ureal10(l: *Lexer) !TokenValue {
     var lit_val: []const u8 = try l.contents_back(int_part + den_count + suffix_part);
     if (slash) {
         return TokenValue{ .RationalLiteral = [2]i64{
-            try std.fmt.parseInt(i64, lit_val[0..int_part], 10),
-            try std.fmt.parseInt(i64, lit_val[(int_part + 1)..lit_val.len], 10),
+            try std.fmt.parseInt(i64, lit_val[0..int_part], n),
+            try std.fmt.parseInt(i64, lit_val[(int_part + 1)..lit_val.len], n),
         } };
     }
     if (den_count != 0 or suffix_part != 0) {
         return TokenValue{ .RealLiteral = try std.fmt.parseFloat(f64, lit_val) };
     }
-    return TokenValue{ .IntegerLiteral = try std.fmt.parseInt(i64, lit_val, 10) };
+    return TokenValue{ .IntegerLiteral = try std.fmt.parseInt(i64, lit_val, n) };
 }
 
-fn ureal16(l: *Lexer) !TokenValue {
-    var int_part: usize = try uinteger16(l);
-    var slash: []const u8 = l.peek(1);
-    var found_slash: bool = false;
-    var den_count: usize = 0;
-    if (slash.len == 1 and slash[0] == '/') {
-        found_slash = true;
-        try l.forward(1);
-        den_count += 1;
-        den_count += try uinteger16(l);
-        if (den_count == 1) {
-            return LexError.ExpectedNumeralAfterSlash;
-        }
-    }
-    var lit_val: []const u8 = try l.contents_back(int_part + den_count);
-    if (found_slash) {
-        return TokenValue{ .HexRatLiteral = [2]i64{
-            try std.fmt.parseInt(i64, lit_val[0..int_part], 16),
-            try std.fmt.parseInt(i64, lit_val[(int_part + 1)..lit_val.len], 16),
-        } };
-    }
-    return TokenValue{ .HexIntLiteral = try std.fmt.parseInt(i64, lit_val, 16) };
-}
-
-fn uinteger2(l: *Lexer) !usize {
+fn uinteger(comptime n: i8, l: *Lexer) !usize {
     var count: usize = 0;
     var first: []const u8 = l.peek(1);
-    if (first.len != 1 or !digit2(first[0])) {
+    if (first.len != 1 or !digitN(n, first[0])) {
         return 0;
     }
     try l.forward(1);
     count += 1;
     first = l.peek(1);
-    while (first.len == 1 and digit2(first[0])) {
+    while (first.len == 1 and digitN(n, first[0])) {
         try l.forward(1);
         count += 1;
         first = l.peek(1);
@@ -1387,143 +949,19 @@ fn uinteger2(l: *Lexer) !usize {
     return count;
 }
 
-fn uinteger8(l: *Lexer) !usize {
-    var count: usize = 0;
-    var first: []const u8 = l.peek(1);
-    if (first.len != 1 or !digit8(first[0])) {
-        return 0;
-    }
-    try l.forward(1);
-    count += 1;
-    first = l.peek(1);
-    while (first.len == 1 and digit8(first[0])) {
-        try l.forward(1);
-        count += 1;
-        first = l.peek(1);
-    }
-    return count;
-}
-
-fn uinteger10(l: *Lexer) !usize {
-    var count: usize = 0;
-    var first: []const u8 = l.peek(1);
-    if (first.len != 1 or !digit10(first[0])) {
-        return 0;
-    }
-    try l.forward(1);
-    count += 1;
-    first = l.peek(1);
-    while (first.len == 1 and digit10(first[0])) {
-        try l.forward(1);
-        count += 1;
-        first = l.peek(1);
-    }
-    return count;
-}
-
-fn uinteger16(l: *Lexer) !usize {
-    var count: usize = 0;
-    var first: []const u8 = l.peek(1);
-    if (first.len != 1 or !digit16(first[0])) {
-        return 0;
-    }
-    try l.forward(1);
-    count += 1;
-    first = l.peek(1);
-    while (first.len == 1 and digit16(first[0])) {
-        try l.forward(1);
-        count += 1;
-        first = l.peek(1);
-    }
-    return count;
-}
-
-fn prefix2(l: *Lexer) !usize {
+fn prefix(comptime n: i8, l: *Lexer) !usize {
     var first2: []const u8 = l.peek(2);
     if (first2.len != 2) {
         return 0;
     }
     if (exactness(first2)) {
         var next2: []const u8 = l.peek(4);
-        if (next2.len == 4 and radix2(next2[2..4])) {
+        if (next2.len == 4 and radix(n, next2[2..4])) {
             try l.forward(4);
             return 4;
         }
-        return 0;
-    } else if (radix2(first2)) {
-        try l.forward(2);
-        var next2: []const u8 = l.peek(2);
-        if (next2.len == 2 and exactness(next2)) {
-            try l.forward(2);
-            return 4;
-        }
-        return 2;
-    }
-    return 0;
-}
-
-fn prefix8(l: *Lexer) !usize {
-    var first2: []const u8 = l.peek(2);
-    if (first2.len != 2) {
-        return 0;
-    }
-    if (exactness(first2)) {
-        var next2: []const u8 = l.peek(4);
-        if (next2.len == 4 and radix8(next2[2..4])) {
-            try l.forward(4);
-            return 4;
-        }
-        return 0;
-    } else if (radix8(first2)) {
-        try l.forward(2);
-        var next2: []const u8 = l.peek(2);
-        if (next2.len == 2 and exactness(next2)) {
-            try l.forward(2);
-            return 4;
-        }
-        return 2;
-    }
-    return 0;
-}
-
-fn prefix10(l: *Lexer) !usize {
-    var first2: []const u8 = l.peek(2);
-    if (first2.len != 2) {
-        return 0;
-    }
-    if (exactness(first2)) {
-        var next2: []const u8 = l.peek(4);
-        if (next2.len == 4 and radix10(next2[2..4])) {
-            try l.forward(4);
-            return 4;
-        }
-        try l.forward(2);
-        return 2;
-    } else if (radix10(first2)) {
-        try l.forward(2);
-        var next2: []const u8 = l.peek(2);
-        if (next2.len == 2 and exactness(next2)) {
-            try l.forward(2);
-            return 4;
-        }
-        return 2;
-    }
-    return 0;
-}
-
-fn prefix16(l: *Lexer) !usize {
-    var first2: []const u8 = l.peek(2);
-    if (first2.len != 2) {
-        return 0;
-    }
-    if (exactness(first2)) {
-        var next2: []const u8 = l.peek(4);
-        if (next2.len == 4 and radix16(next2[2..4])) {
-            try l.forward(4);
-            return 4;
-        }
-        return 0;
-    } else if (radix16(first2)) {
+        return if (n == 10) 2 else 0;
+    } else if (radix(n, first2)) {
         try l.forward(2);
         var next2: []const u8 = l.peek(2);
         if (next2.len == 2 and exactness(next2)) {
@@ -1562,13 +1000,13 @@ fn suffix(l: *Lexer) !usize {
             count += 1;
         }
         var first_dig: []const u8 = l.peek(1);
-        if (first_dig.len != 1 or !digit10(first_dig[0])) {
+        if (first_dig.len != 1 or !digit(first_dig[0])) {
             return LexError.ExpectedSuffix;
         }
         try l.forward(1);
         count += 1;
         first_dig = l.peek(1);
-        while (first_dig.len == 1 and digit10(first_dig[0])) {
+        while (first_dig.len == 1 and digit(first_dig[0])) {
             try l.forward(1);
             count += 1;
             first_dig = l.peek(1);
@@ -1578,7 +1016,7 @@ fn suffix(l: *Lexer) !usize {
 }
 
 fn exponent_marker(c: u8) bool {
-    return c == 'e';
+    return c == 'e' or c == 'E';
 }
 
 fn sign(c: u8) bool {
@@ -1586,41 +1024,30 @@ fn sign(c: u8) bool {
 }
 
 fn exactness(s: []const u8) bool {
-    return s[0] == '#' and (s[1] == 'i' or s[1] == 'e');
+    return s[0] == '#' and
+        (s[1] == 'i' or s[1] == 'e' or
+        s[1] == 'I' or s[1] == 'E');
 }
 
-fn radix2(s: []const u8) bool {
-    return s[0] == '#' and s[1] == 'b';
-}
-
-fn radix8(s: []const u8) bool {
-    return s[0] == '#' and s[1] == 'o';
-}
-
-fn radix10(s: []const u8) bool {
-    return s[0] == '#' and s[1] == 'd';
-}
-
-fn radix16(s: []const u8) bool {
-    return s[0] == '#' and s[1] == 'x';
+fn radix(comptime n: i8, s: []const u8) bool {
+    return s[0] == '#' and s[1] == switch (n) {
+        2 => 'b',
+        8 => 'o',
+        10 => 'd',
+        16 => 'x',
+        else => unreachable,
+    };
 }
 
 fn digit(c: u8) bool {
     return c >= '0' and c <= '9';
 }
 
-fn digit2(c: u8) bool {
-    return c == '0' or c == '1';
-}
-
-fn digit8(c: u8) bool {
-    return c >= '0' and c <= '7';
-}
-
-fn digit10(c: u8) bool {
-    return digit(c);
-}
-
-fn digit16(c: u8) bool {
-    return digit10(c) or (c >= 'a' and c <= 'f');
+fn digitN(comptime n: i8, c: u8) bool {
+    return (c >= '0' and c <= switch (n) {
+        2 => '1',
+        8 => '7',
+        10, 16 => '9',
+        else => unreachable,
+    }) or (n == 16 and ((c >= 'a' and c <= 'f') or (c >= 'A' and c <= 'F')));
 }

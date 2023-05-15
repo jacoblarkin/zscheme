@@ -126,8 +126,8 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
         lex.TokenTag.BoolLiteral => |b| expr.* = Expression{ .BoolLiteral = b },
         lex.TokenTag.CharLiteral => |c| expr.* = Expression{ .CharLiteral = c },
         lex.TokenTag.StringLiteral => |s| expr.* = Expression{ .StringLiteral = s },
-        lex.TokenTag.BinaryIntLiteral, lex.TokenTag.HexIntLiteral, lex.TokenTag.OctIntLiteral, lex.TokenTag.IntegerLiteral => |num| expr.* = Expression{ .IntegerLiteral = num },
-        lex.TokenTag.BinaryRatLiteral, lex.TokenTag.HexRatLiteral, lex.TokenTag.OctRatLiteral, lex.TokenTag.RationalLiteral => |num| expr.* = Expression{ .RationalLiteral = [2]i64{ num[0], num[1] } },
+        lex.TokenTag.IntegerLiteral => |num| expr.* = Expression{ .IntegerLiteral = num },
+        lex.TokenTag.RationalLiteral => |num| expr.* = Expression{ .RationalLiteral = [2]i64{ num[0], num[1] } },
         lex.TokenTag.RealLiteral => |num| expr.* = Expression{ .RealLiteral = num },
         lex.TokenTag.ComplexLiteral => |num| expr.* = Expression{ .ComplexLiteral = [2]f64{ num[0], num[1] } },
         lex.TokenTag.Identifier => |ident| {
