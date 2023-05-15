@@ -13,7 +13,7 @@ pub fn main() anyerror!void {
     std.log.info("All your codebase are belong to us.", .{});
 
     var parser = try Parser.Parser.init(allocator, "");
-    //defer parser.deinit();
+    defer parser.deinit();
 
     var interpreter = try Interpreter.Interpreter.init(allocator);
     defer interpreter.deinit();
@@ -37,7 +37,7 @@ pub fn main() anyerror!void {
             continue;
         };
         interpreter.interpret(expr).print();
-        allocator.destroy(expr);
+        expr.deinit(allocator);
         try stdout.print("\n", .{});
     }
 }

@@ -99,9 +99,11 @@ pub const Lexer = struct {
     allocator: std.mem.Allocator,
     contents: []const u8,
     contents_iter: std.unicode.Utf8Iterator,
+    repl: bool,
     line: usize,
     column: usize,
     position: usize,
+    strings: std.ArrayList([]const u8),
 
     pub fn init(allocator: std.mem.Allocator, filename: []const u8) !Lexer {
         var file = try std.fs.cwd().openFile(filename, .{});
@@ -115,9 +117,11 @@ pub const Lexer = struct {
             .allocator = allocator,
             .contents = contents,
             .contents_iter = (try std.unicode.Utf8View.init(contents)).iterator(),
+            .repl = false,
             .line = 1,
             .column = 1,
             .position = 0,
+            .strings = std.ArrayList([]const u8).init(allocator),
         };
     }
 
@@ -127,9 +131,11 @@ pub const Lexer = struct {
             .allocator = allocator,
             .contents = "",
             .contents_iter = std.unicode.Utf8View.initUnchecked("").iterator(),
+            .repl = true,
             .line = 0,
             .column = 1,
             .position = 0,
+            .strings = std.ArrayList([]const u8).init(allocator),
         };
     }
 
@@ -165,7 +171,13 @@ pub const Lexer = struct {
     }
 
     pub fn deinit(l: *Lexer) void {
-        l.allocator.free(l.contents);
+        for (l.strings.items) |s| {
+            l.allocator.free(s);
+        }
+        l.strings.deinit();
+        if (!l.repl) {
+            l.allocator.free(l.contents);
+        }
     }
 
     fn peek(l: *Lexer, n: usize) []const u8 {
@@ -702,6 +714,8 @@ fn string(l: *Lexer) !TokenValue {
     }
 
     str = try l.allocator.realloc(str, count);
+    errdefer l.allocator.free(str);
+    try l.strings.append(str);
 
     quote = l.peek(1);
     if (quote.len != 1 or quote[0] != '"') {

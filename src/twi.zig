@@ -152,10 +152,10 @@ fn interpretLiteral(expr: *const parser.Expression) LispVal {
     };
 }
 
-fn interpretVector(interpreter: *Interpreter, v: std.ArrayList(parser.Expression)) LispVal {
+fn interpretVector(interpreter: *Interpreter, v: std.ArrayList(*parser.Expression)) LispVal {
     var va = std.ArrayList(LispVal).init(interpreter.allocator);
     for (v.items) |vexpr| {
-        va.append(interpreter.interpret(&vexpr)) catch break;
+        va.append(interpreter.interpret(vexpr)) catch break;
     }
     return LispVal{ .Vector = va };
 }

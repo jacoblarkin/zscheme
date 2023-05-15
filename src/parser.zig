@@ -34,18 +34,39 @@ pub const Expression = union(ExpressionTag) {
     RealLiteral: f64,
     ComplexLiteral: [2]f64,
     StringLiteral: []const u8,
-    Vector: std.ArrayList(Expression),
+    Vector: std.ArrayList(*Expression),
     ByteVector: std.ArrayList(u8),
     QuotedExpression: *Expression,
     QuasiQuotedExpression: *Expression,
     Cons: ConsCell,
     Nil: void,
     UnquotedElement: *Expression,
+
+    pub fn deinit(expr: *Expression, allocator: std.mem.Allocator) void {
+        switch (expr.*) {
+            ExpressionTag.Vector => |v| {
+                for (v.items) |ex| {
+                    ex.deinit(allocator);
+                }
+                v.deinit();
+            },
+            ExpressionTag.ByteVector => |bv| bv.deinit(),
+            ExpressionTag.QuotedExpression => |qe| allocator.destroy(qe),
+            ExpressionTag.QuasiQuotedExpression => |qqe| allocator.destroy(qqe),
+            ExpressionTag.UnquotedElement => |uqe| allocator.destroy(uqe),
+            ExpressionTag.Cons => |c| {
+                c.Car.deinit(allocator);
+                c.Cdr.deinit(allocator);
+            },
+            else => {},
+        }
+        allocator.destroy(expr);
+    }
 };
 
 pub const ConsCell = struct {
-    Car: *const Expression,
-    Cdr: *const Expression,
+    Car: *Expression,
+    Cdr: *Expression,
 };
 
 pub const Parser = struct {
@@ -172,21 +193,20 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
             }
         },
         lex.TokenTag.VecBegin => {
-            var vec: std.ArrayList(Expression) = std.ArrayList(Expression).init(parser.allocator);
+            var vec: std.ArrayList(*Expression) = std.ArrayList(*Expression).init(parser.allocator);
             while (parser.peek().value != lex.TokenTag.RParen) {
                 var val: *Expression = parseExpr(parser, quoted) orelse {
                     vec.deinit();
                     parser.allocator.destroy(expr);
                     return null;
                 };
-                vec.append(val.*) catch {
+                vec.append(val) catch {
                     vec.deinit();
                     parser.allocator.destroy(expr);
                     parser.allocator.destroy(val);
                     parser.hadError = true;
                     return null;
                 };
-                parser.allocator.destroy(val);
             }
             expr.* = Expression{ .Vector = vec };
         },
