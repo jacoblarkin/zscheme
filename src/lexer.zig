@@ -1,4 +1,7 @@
 const std = @import("std");
+const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
+const expectError = std.testing.expectError;
 
 pub const TokenTag = enum {
     BoolLiteral,
@@ -814,10 +817,28 @@ fn number(l: *Lexer) !TokenValue {
     return complex(10, l);
 }
 
+test "lex number" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("#b10110");
+    try expectEqual(number(&lex), TokenValue{ .IntegerLiteral = 22 });
+    try lex.replLine("#o#I3324");
+    try expectEqual(number(&lex), TokenValue{ .IntegerLiteral = 4 + 2 * 8 + 3 * 64 + 3 * 512 });
+    try lex.replLine("#E1234");
+    try expectEqual(number(&lex), TokenValue{ .IntegerLiteral = 1234 });
+    try lex.replLine("#E1234/5678");
+    try expectEqual(number(&lex), TokenValue{ .RationalLiteral = [2]i64{ 1234, 5678 } });
+    try lex.replLine("12.34-567.1i");
+    try expectEqual(number(&lex), TokenValue{ .ComplexLiteral = [2]f64{ 12.34, -567.1 } });
+    try lex.replLine("#X1a2B/C28a");
+    try expectEqual(number(&lex), TokenValue{ .RationalLiteral = [2]i64{ 0x1a2b, 0xc28a } });
+}
+
 fn complex(comptime n: i8, l: *Lexer) !TokenValue {
-    var imag_only = l.peek(2);
-    if (imag_only.len == 2) {
-        if ((imag_only[0] == '+' or imag_only[0] == '-') and imag_only[1] == 'i') {
+    var imag_only = l.peek(3);
+    if (imag_only.len >= 2) {
+        if ((imag_only[0] == '+' or imag_only[0] == '-') and imag_only[1] == 'i' and (imag_only.len == 2 or (imag_only.len == 3 and imag_only[2] != 'n'))) {
+            try l.forward(2);
             var sign_f: f64 = 1.0;
             if (imag_only[0] == '-') {
                 sign_f = -1.0;
@@ -855,8 +876,13 @@ fn complex(comptime n: i8, l: *Lexer) !TokenValue {
             } };
         },
         '+', '-' => {
-            var tok_imag: TokenValue = try realN(n, l);
-            var i_: []const u8 = l.peek(1);
+            var i_: []const u8 = l.peek(2);
+            if (i_.len < 2) {
+                return LexError.ExpectedI;
+            }
+            var tok_imag: TokenValue = if (i_[1] != 'i') try realN(n, l) else TokenValue{ .RealLiteral = if (i_[0] == '+') 1 else -1 };
+            if (i_[1] == 'i') try l.forward(1);
+            i_ = l.peek(1);
             if (i_.len != 1 or i_[0] != 'i') {
                 return LexError.ExpectedI;
             }
@@ -894,6 +920,69 @@ fn complex(comptime n: i8, l: *Lexer) !TokenValue {
     }
 }
 
+test "lex complex" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("+i");
+    try expectEqual(complex(2, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, 1 } });
+    try lex.replLine("+i");
+    try expectEqual(complex(8, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, 1 } });
+    try lex.replLine("+i");
+    try expectEqual(complex(10, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, 1 } });
+    try lex.replLine("+i");
+    try expectEqual(complex(16, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, 1 } });
+
+    try lex.replLine("-i");
+    try expectEqual(complex(2, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, -1 } });
+    try lex.replLine("-i");
+    try expectEqual(complex(8, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, -1 } });
+    try lex.replLine("-i");
+    try expectEqual(complex(10, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, -1 } });
+    try lex.replLine("-i");
+    try expectEqual(complex(16, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, -1 } });
+
+    try lex.replLine("11-i");
+    try expectEqual(complex(2, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 3, -1 } });
+    try lex.replLine("11-i");
+    try expectEqual(complex(8, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 9, -1 } });
+    try lex.replLine("11-i");
+    try expectEqual(complex(10, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 11, -1 } });
+    try lex.replLine("11-i");
+    try expectEqual(complex(16, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 17, -1 } });
+
+    try lex.replLine("10+10i");
+    try expectEqual(complex(2, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 2, 2 } });
+    try lex.replLine("10+10i");
+    try expectEqual(complex(8, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 8, 8 } });
+    try lex.replLine("10+10i");
+    try expectEqual(complex(10, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 10, 10 } });
+    try lex.replLine("10+10i");
+    try expectEqual(complex(16, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 16, 16 } });
+
+    try lex.replLine("+inf.0i");
+    try expectEqual(complex(2, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, std.math.inf(f64) } });
+    try lex.replLine("+inf.0i");
+    try expectEqual(complex(8, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, std.math.inf(f64) } });
+    try lex.replLine("+inf.0i");
+    try expectEqual(complex(10, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, std.math.inf(f64) } });
+    try lex.replLine("+inf.0i");
+    try expectEqual(complex(16, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 0, std.math.inf(f64) } });
+
+    try lex.replLine("10@10");
+    try expectEqual(complex(2, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 2 * std.math.cos(2.0), 2 * std.math.sin(2.0) } });
+    try lex.replLine("10@10");
+    try expectEqual(complex(8, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 8 * std.math.cos(8.0), 8 * std.math.sin(8.0) } });
+    try lex.replLine("10@10");
+    try expectEqual(complex(10, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 10 * std.math.cos(10.0), 10 * std.math.sin(10.0) } });
+    try lex.replLine("10@10");
+    try expectEqual(complex(16, &lex), TokenValue{ .ComplexLiteral = [2]f64{ 16 * std.math.cos(16.0), 16 * std.math.sin(16.0) } });
+
+    try lex.replLine("+nan.0@0.5");
+    try expect(std.math.isNan((try complex(10, &lex)).ComplexLiteral[0]));
+    try lex.replLine("+nan.0@0.5");
+    try expect(std.math.isNan((try complex(10, &lex)).ComplexLiteral[1]));
+}
+
 fn realN(comptime n: i8, l: *Lexer) !TokenValue {
     var infnan_: usize = try infnan(l);
     if (infnan_ != 0) {
@@ -924,6 +1013,53 @@ fn realN(comptime n: i8, l: *Lexer) !TokenValue {
         ureal_tok.negate();
     }
     return ureal_tok;
+}
+
+test "lex real" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("+inf.0");
+    try expectEqual(realN(2, &lex), TokenValue{ .RealLiteral = std.math.inf(f64) });
+    try lex.replLine("+inf.0");
+    try expectEqual(realN(8, &lex), TokenValue{ .RealLiteral = std.math.inf(f64) });
+    try lex.replLine("+inf.0");
+    try expectEqual(realN(10, &lex), TokenValue{ .RealLiteral = std.math.inf(f64) });
+    try lex.replLine("+inf.0");
+    try expectEqual(realN(16, &lex), TokenValue{ .RealLiteral = std.math.inf(f64) });
+
+    try lex.replLine("-inf.0");
+    try expectEqual(realN(2, &lex), TokenValue{ .RealLiteral = -1 * std.math.inf(f64) });
+    try lex.replLine("-inf.0");
+    try expectEqual(realN(8, &lex), TokenValue{ .RealLiteral = -1 * std.math.inf(f64) });
+    try lex.replLine("-inf.0");
+    try expectEqual(realN(10, &lex), TokenValue{ .RealLiteral = -1 * std.math.inf(f64) });
+    try lex.replLine("-inf.0");
+    try expectEqual(realN(16, &lex), TokenValue{ .RealLiteral = -1 * std.math.inf(f64) });
+
+    try lex.replLine("+nan.0");
+    try expect(std.math.isNan((try realN(2, &lex)).RealLiteral));
+    try lex.replLine("+nan.0");
+    try expect(std.math.isNan((try realN(8, &lex)).RealLiteral));
+    try lex.replLine("+nan.0");
+    try expect(std.math.isNan((try realN(10, &lex)).RealLiteral));
+    try lex.replLine("+nan.0");
+    try expect(std.math.isNan((try realN(16, &lex)).RealLiteral));
+
+    try lex.replLine("-nan.0");
+    try expect(std.math.isNan((try realN(2, &lex)).RealLiteral));
+    try lex.replLine("-nan.0");
+    try expect(std.math.isNan((try realN(8, &lex)).RealLiteral));
+    try lex.replLine("-nan.0");
+    try expect(std.math.isNan((try realN(10, &lex)).RealLiteral));
+    try lex.replLine("-nan.0");
+    try expect(std.math.isNan((try realN(16, &lex)).RealLiteral));
+
+    try lex.replLine("10.23");
+    try expectEqual(realN(10, &lex), TokenValue{ .RealLiteral = 10.23 });
+    try lex.replLine("-10.23");
+    try expectEqual(realN(10, &lex), TokenValue{ .RealLiteral = -10.23 });
+    try lex.replLine("+10.23");
+    try expectEqual(realN(10, &lex), TokenValue{ .RealLiteral = 10.23 });
 }
 
 fn ureal(comptime n: i8, l: *Lexer) !TokenValue {
@@ -957,7 +1093,7 @@ fn ureal(comptime n: i8, l: *Lexer) !TokenValue {
         }
     }
     var suffix_part: usize = 0;
-    if (!slash) {
+    if (!slash and n == 10) {
         suffix_part += try suffix(l);
     }
     var lit_val: []const u8 = try l.contents_back(int_part + den_count + suffix_part);
@@ -971,6 +1107,69 @@ fn ureal(comptime n: i8, l: *Lexer) !TokenValue {
         return TokenValue{ .RealLiteral = try std.fmt.parseFloat(f64, lit_val) };
     }
     return TokenValue{ .IntegerLiteral = try std.fmt.parseInt(i64, lit_val, n) };
+}
+
+test "lex ureal" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("10");
+    try expectEqual(ureal(2, &lex), TokenValue{ .IntegerLiteral = 2 });
+    try lex.replLine("10");
+    try expectEqual(ureal(8, &lex), TokenValue{ .IntegerLiteral = 8 });
+    try lex.replLine("10");
+    try expectEqual(ureal(10, &lex), TokenValue{ .IntegerLiteral = 10 });
+    try lex.replLine("10");
+    try expectEqual(ureal(16, &lex), TokenValue{ .IntegerLiteral = 16 });
+
+    try lex.replLine("10e2");
+    try expectEqual(ureal(2, &lex), TokenValue{ .IntegerLiteral = 2 });
+    try lex.replLine("10e2");
+    try expectEqual(ureal(8, &lex), TokenValue{ .IntegerLiteral = 8 });
+    try lex.replLine("10e2");
+    try expectEqual(ureal(10, &lex), TokenValue{ .RealLiteral = 1000.0 });
+    try lex.replLine("10e2");
+    try expectEqual(ureal(16, &lex), TokenValue{ .IntegerLiteral = 4322 });
+
+    try lex.replLine("11/111");
+    try expectEqual(ureal(2, &lex), TokenValue{ .RationalLiteral = [2]i64{ 3, 7 } });
+    try lex.replLine("11/111");
+    try expectEqual(ureal(8, &lex), TokenValue{ .RationalLiteral = [2]i64{ 9, 73 } });
+    try lex.replLine("11/111");
+    try expectEqual(ureal(10, &lex), TokenValue{ .RationalLiteral = [2]i64{ 11, 111 } });
+    try lex.replLine("11/111");
+    try expectEqual(ureal(16, &lex), TokenValue{ .RationalLiteral = [2]i64{ 17, 273 } });
+
+    try lex.replLine("10.23");
+    try expectEqual(ureal(2, &lex), TokenValue{ .IntegerLiteral = 2 });
+    try lex.replLine("10.23");
+    try expectEqual(ureal(8, &lex), TokenValue{ .IntegerLiteral = 8 });
+    try lex.replLine("10.23");
+    try expectEqual(ureal(10, &lex), TokenValue{ .RealLiteral = 10.23 });
+    try lex.replLine("10.23");
+    try expectEqual(ureal(16, &lex), TokenValue{ .IntegerLiteral = 16 });
+
+    try lex.replLine("10.e2");
+    try expectEqual(ureal(2, &lex), TokenValue{ .IntegerLiteral = 2 });
+    try lex.replLine("10.e2");
+    try expectEqual(ureal(8, &lex), TokenValue{ .IntegerLiteral = 8 });
+    try lex.replLine("10.e2");
+    try expectEqual(ureal(10, &lex), TokenValue{ .RealLiteral = 1000.0 });
+    try lex.replLine("10.e2");
+    try expectEqual(ureal(16, &lex), TokenValue{ .IntegerLiteral = 16 });
+
+    try lex.replLine(".4");
+    try expectError(error.InvalidCharacter, ureal(2, &lex));
+    try lex.replLine(".4");
+    try expectError(error.InvalidCharacter, ureal(2, &lex));
+    try lex.replLine(".4");
+    try expectEqual(ureal(10, &lex), TokenValue{ .RealLiteral = 0.4 });
+    try lex.replLine(".4e3");
+    try expectEqual(ureal(10, &lex), TokenValue{ .RealLiteral = 400 });
+    try lex.replLine(".4");
+    try expectError(error.InvalidCharacter, ureal(2, &lex));
+
+    try lex.replLine("1234/5678");
+    try expectEqual(ureal(10, &lex), TokenValue{ .RationalLiteral = [2]i64{ 1234, 5678 } });
 }
 
 fn uinteger(comptime n: i8, l: *Lexer) !usize {
@@ -990,6 +1189,64 @@ fn uinteger(comptime n: i8, l: *Lexer) !usize {
     return count;
 }
 
+test "lex uinteger" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("1101");
+    try expectEqual(uinteger(2, &lex), 4);
+    try lex.replLine("1101");
+    try expectEqual(uinteger(8, &lex), 4);
+    try lex.replLine("1101");
+    try expectEqual(uinteger(10, &lex), 4);
+    try lex.replLine("1101");
+    try expectEqual(uinteger(16, &lex), 4);
+
+    try lex.replLine("60431");
+    try expectEqual(uinteger(2, &lex), 0);
+    try lex.replLine("60431");
+    try expectEqual(uinteger(8, &lex), 5);
+    try lex.replLine("60431");
+    try expectEqual(uinteger(10, &lex), 5);
+    try lex.replLine("60431");
+    try expectEqual(uinteger(16, &lex), 5);
+
+    try lex.replLine("997321");
+    try expectEqual(uinteger(2, &lex), 0);
+    try lex.replLine("997321");
+    try expectEqual(uinteger(8, &lex), 0);
+    try lex.replLine("997321");
+    try expectEqual(uinteger(10, &lex), 6);
+    try lex.replLine("997321");
+    try expectEqual(uinteger(16, &lex), 6);
+
+    try lex.replLine("aB29fC03");
+    try expectEqual(uinteger(2, &lex), 0);
+    try lex.replLine("aB29fC03");
+    try expectEqual(uinteger(8, &lex), 0);
+    try lex.replLine("aB29fC03");
+    try expectEqual(uinteger(10, &lex), 0);
+    try lex.replLine("aB29fC03");
+    try expectEqual(uinteger(16, &lex), 8);
+
+    try lex.replLine("");
+    try expectEqual(uinteger(2, &lex), 0);
+    try lex.replLine("");
+    try expectEqual(uinteger(8, &lex), 0);
+    try lex.replLine("");
+    try expectEqual(uinteger(10, &lex), 0);
+    try lex.replLine("");
+    try expectEqual(uinteger(16, &lex), 0);
+
+    try lex.replLine("22.33");
+    try expectEqual(uinteger(2, &lex), 0);
+    try lex.replLine("22.33");
+    try expectEqual(uinteger(8, &lex), 2);
+    try lex.replLine("22.33");
+    try expectEqual(uinteger(10, &lex), 2);
+    try lex.replLine("22.33");
+    try expectEqual(uinteger(16, &lex), 2);
+}
+
 fn prefix(comptime n: i8, l: *Lexer) !usize {
     var first2: []const u8 = l.peek(2);
     if (first2.len != 2) {
@@ -1001,7 +1258,11 @@ fn prefix(comptime n: i8, l: *Lexer) !usize {
             try l.forward(4);
             return 4;
         }
-        return if (n == 10) 2 else 0;
+        if (n == 10) {
+            try l.forward(2);
+            return 2;
+        }
+        return 0;
     } else if (radix(n, first2)) {
         try l.forward(2);
         var next2: []const u8 = l.peek(2);
@@ -1012,6 +1273,43 @@ fn prefix(comptime n: i8, l: *Lexer) !usize {
         return 2;
     }
     return 0;
+}
+
+test "lex prefix" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("#b#e");
+    try expectEqual(prefix(2, &lex), 4);
+
+    try lex.replLine("#i#B");
+    try expectEqual(prefix(2, &lex), 4);
+
+    try lex.replLine("");
+    try expectEqual(prefix(2, &lex), 0);
+    try lex.replLine("");
+    try expectEqual(prefix(8, &lex), 0);
+    try lex.replLine("");
+    try expectEqual(prefix(10, &lex), 0);
+    try lex.replLine("");
+    try expectEqual(prefix(16, &lex), 0);
+
+    try lex.replLine("#E");
+    try expectEqual(prefix(2, &lex), 0);
+    try lex.replLine("#E");
+    try expectEqual(prefix(8, &lex), 0);
+    try lex.replLine("#E");
+    try expectEqual(prefix(10, &lex), 2);
+    try lex.replLine("#E");
+    try expectEqual(prefix(16, &lex), 0);
+
+    try lex.replLine("1234");
+    try expectEqual(prefix(2, &lex), 0);
+    try lex.replLine("1234");
+    try expectEqual(prefix(8, &lex), 0);
+    try lex.replLine("1234");
+    try expectEqual(prefix(10, &lex), 0);
+    try lex.replLine("1234");
+    try expectEqual(prefix(16, &lex), 0);
 }
 
 fn infnan(l: *Lexer) !usize {
@@ -1029,10 +1327,35 @@ fn infnan(l: *Lexer) !usize {
     return 6;
 }
 
+test "lex infnan" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("+inf.0");
+    try expectEqual(infnan(&lex), 6);
+
+    try lex.replLine("-inf.0");
+    try expectEqual(infnan(&lex), 6);
+
+    try lex.replLine("+nan.0");
+    try expectEqual(infnan(&lex), 6);
+
+    try lex.replLine("-nan.0");
+    try expectEqual(infnan(&lex), 6);
+
+    try lex.replLine("nan.0");
+    try expectEqual(infnan(&lex), 0);
+
+    try lex.replLine("+20.0");
+    try expectEqual(infnan(&lex), 0);
+
+    try lex.replLine("inf");
+    try expectEqual(infnan(&lex), 0);
+}
+
 fn suffix(l: *Lexer) !usize {
     var count: usize = 0;
     var first: []const u8 = l.peek(1);
-    if (first.len == 1 and exponent_marker(first[0])) {
+    if (first.len == 1 and exponentMarker(first[0])) {
         try l.forward(1);
         count += 1;
         var suff_sign: []const u8 = l.peek(1);
@@ -1056,12 +1379,52 @@ fn suffix(l: *Lexer) !usize {
     return count;
 }
 
-fn exponent_marker(c: u8) bool {
+test "lex suffix" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("e+10");
+    try expectEqual(suffix(&lex), 4);
+
+    try lex.replLine("E-8");
+    try expectEqual(suffix(&lex), 3);
+
+    try lex.replLine("");
+    try expectEqual(suffix(&lex), 0);
+
+    // Error comes later when lexer does not find delimeter
+    // TODO: Is this ok? Or should it throw and error here?
+    try lex.replLine("e+10.2");
+    try expectEqual(suffix(&lex), 4);
+
+    try lex.replLine("efg");
+    try expectError(LexError.ExpectedSuffix, suffix(&lex));
+}
+
+fn exponentMarker(c: u8) bool {
     return c == 'e' or c == 'E';
+}
+
+test "lex exponentMarker" {
+    try expect(exponentMarker('e'));
+    try expect(exponentMarker('E'));
+    try expect(!exponentMarker('1'));
+    try expect(!exponentMarker('a'));
+    try expect(!exponentMarker('b'));
+    try expect(!exponentMarker('i'));
+    try expect(!exponentMarker('I'));
+    try expect(!exponentMarker('#'));
 }
 
 fn sign(c: u8) bool {
     return c == '+' or c == '-';
+}
+
+test "lex sign" {
+    try expect(sign('+'));
+    try expect(sign('-'));
+    try expect(!sign('*'));
+    try expect(!sign('/'));
+    try expect(!sign('p'));
 }
 
 fn exactness(s: []const u8) bool {
@@ -1070,14 +1433,89 @@ fn exactness(s: []const u8) bool {
         s[1] == 'I' or s[1] == 'E');
 }
 
+test "lex exactness" {
+    try expect(exactness("#e"));
+    try expect(exactness("#E"));
+    try expect(exactness("#i"));
+    try expect(exactness("#I"));
+
+    try expect(!exactness("#d"));
+    try expect(!exactness("ee"));
+    try expect(!exactness("II"));
+}
+
 fn radix(comptime n: i8, s: []const u8) bool {
-    return s[0] == '#' and s[1] == switch (n) {
+    return s[0] == '#' and (s[1] == switch (n) {
         2 => 'b',
         8 => 'o',
         10 => 'd',
         16 => 'x',
         else => unreachable,
-    };
+    } or s[1] == switch (n) {
+        2 => 'B',
+        8 => 'O',
+        10 => 'D',
+        16 => 'X',
+        else => unreachable,
+    });
+}
+
+test "lex radix" {
+    try expect(radix(2, "#b"));
+    try expect(radix(2, "#B"));
+    try expect(!radix(2, "#o"));
+    try expect(!radix(2, "#O"));
+    try expect(!radix(2, "#d"));
+    try expect(!radix(2, "#D"));
+    try expect(!radix(2, "#x"));
+    try expect(!radix(2, "#X"));
+    try expect(!radix(2, "#a"));
+    try expect(!radix(2, "#P"));
+    try expect(!radix(2, "#i"));
+    try expect(!radix(2, "#E"));
+
+    try expect(!radix(8, "#b"));
+    try expect(!radix(8, "#B"));
+    try expect(radix(8, "#o"));
+    try expect(radix(8, "#O"));
+    try expect(!radix(8, "#d"));
+    try expect(!radix(8, "#D"));
+    try expect(!radix(8, "#x"));
+    try expect(!radix(8, "#X"));
+    try expect(!radix(8, "#a"));
+    try expect(!radix(8, "#P"));
+    try expect(!radix(8, "#i"));
+    try expect(!radix(8, "#E"));
+
+    try expect(!radix(10, "#b"));
+    try expect(!radix(10, "#B"));
+    try expect(!radix(10, "#o"));
+    try expect(!radix(10, "#O"));
+    try expect(radix(10, "#d"));
+    try expect(radix(10, "#D"));
+    try expect(!radix(10, "#x"));
+    try expect(!radix(10, "#X"));
+    try expect(!radix(10, "#a"));
+    try expect(!radix(10, "#P"));
+    try expect(!radix(10, "#i"));
+    try expect(!radix(10, "#E"));
+
+    try expect(!radix(16, "#b"));
+    try expect(!radix(16, "#B"));
+    try expect(!radix(16, "#o"));
+    try expect(!radix(16, "#O"));
+    try expect(!radix(16, "#d"));
+    try expect(!radix(16, "#D"));
+    try expect(radix(16, "#x"));
+    try expect(radix(16, "#X"));
+    try expect(!radix(16, "#a"));
+    try expect(!radix(16, "#P"));
+    try expect(!radix(16, "#i"));
+    try expect(!radix(16, "#E"));
+
+    try expect(!radix(2, "bb"));
+    try expect(!radix(2, "bB"));
+    try expect(!radix(2, "bD"));
 }
 
 fn digit(c: u8) bool {
@@ -1091,4 +1529,79 @@ fn digitN(comptime n: i8, c: u8) bool {
         10, 16 => '9',
         else => unreachable,
     }) or (n == 16 and ((c >= 'a' and c <= 'f') or (c >= 'A' and c <= 'F')));
+}
+
+test "lex digit" {
+    try expect(digitN(2, '0'));
+    try expect(digitN(2, '1'));
+    try expect(!digitN(2, '2'));
+    try expect(!digitN(2, 'A'));
+    try expect(!digitN(2, 0));
+    try expect(!digitN(2, 1));
+
+    try expect(digitN(8, '0'));
+    try expect(digitN(8, '1'));
+    try expect(digitN(8, '2'));
+    try expect(digitN(8, '3'));
+    try expect(digitN(8, '4'));
+    try expect(digitN(8, '5'));
+    try expect(digitN(8, '6'));
+    try expect(digitN(8, '7'));
+    try expect(!digitN(8, '8'));
+    try expect(!digitN(8, '9'));
+    try expect(!digitN(8, 'A'));
+    try expect(!digitN(8, 0));
+    try expect(!digitN(8, 1));
+
+    try expect(digitN(10, '0'));
+    try expect(digitN(10, '1'));
+    try expect(digitN(10, '2'));
+    try expect(digitN(10, '3'));
+    try expect(digitN(10, '4'));
+    try expect(digitN(10, '5'));
+    try expect(digitN(10, '6'));
+    try expect(digitN(10, '7'));
+    try expect(digitN(10, '8'));
+    try expect(digitN(10, '9'));
+    try expect(!digitN(10, 'A'));
+    try expect(!digitN(10, 0));
+    try expect(!digitN(10, 1));
+    try expect(digit('0'));
+    try expect(digit('1'));
+    try expect(digit('2'));
+    try expect(digit('3'));
+    try expect(digit('4'));
+    try expect(digit('5'));
+    try expect(digit('6'));
+    try expect(digit('7'));
+    try expect(digit('8'));
+    try expect(digit('9'));
+    try expect(!digit('A'));
+    try expect(!digit(0));
+    try expect(!digit(1));
+
+    try expect(digitN(16, '0'));
+    try expect(digitN(16, '1'));
+    try expect(digitN(16, '2'));
+    try expect(digitN(16, '3'));
+    try expect(digitN(16, '4'));
+    try expect(digitN(16, '5'));
+    try expect(digitN(16, '6'));
+    try expect(digitN(16, '7'));
+    try expect(digitN(16, '8'));
+    try expect(digitN(16, '9'));
+    try expect(digitN(16, 'A'));
+    try expect(digitN(16, 'B'));
+    try expect(digitN(16, 'C'));
+    try expect(digitN(16, 'D'));
+    try expect(digitN(16, 'E'));
+    try expect(digitN(16, 'F'));
+    try expect(digitN(16, 'a'));
+    try expect(digitN(16, 'b'));
+    try expect(digitN(16, 'c'));
+    try expect(digitN(16, 'd'));
+    try expect(digitN(16, 'e'));
+    try expect(digitN(16, 'f'));
+    try expect(!digitN(16, 0));
+    try expect(!digitN(16, 1));
 }
