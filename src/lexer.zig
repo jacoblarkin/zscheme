@@ -2,6 +2,7 @@ const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
+const expectEqualStrings = std.testing.expectEqualStrings;
 
 pub const TokenTag = enum {
     BoolLiteral,
@@ -383,13 +384,39 @@ pub const Lexer = struct {
 
 fn delimeter(c: u8) bool {
     return whitespace(c) or c == ';' or c == '(' or c == '|' or
-        c == ')' or c == '"' or c == ';';
+        c == ')' or c == '"';
+}
+
+test "delimeter" {
+    try expect(delimeter(' '));
+    try expect(delimeter('\n'));
+    try expect(delimeter('\r'));
+    try expect(delimeter('\t'));
+    try expect(delimeter(';'));
+    try expect(delimeter('('));
+    try expect(delimeter('|'));
+    try expect(delimeter(')'));
+    try expect(delimeter('"'));
+
+    try expect(!delimeter('a'));
+    try expect(!delimeter('B'));
+    try expect(!delimeter('.'));
+    try expect(!delimeter(','));
+    try expect(!delimeter('0'));
+    try expect(!delimeter('5'));
+    try expect(!delimeter('^'));
+    try expect(!delimeter('@'));
+    try expect(!delimeter('*'));
+    try expect(!delimeter(':'));
+    try expect(!delimeter('`'));
+    try expect(!delimeter('\''));
 }
 
 fn comment(l: *Lexer, nested: bool) !TokenValue {
     if (nested) {
         try l.forward(2);
         var ch = try l.next(1);
+        var count: usize = 1;
         if (ch.len < 1) {
             return LexError.UnclosedNestedComment;
         }
@@ -400,9 +427,11 @@ fn comment(l: *Lexer, nested: bool) !TokenValue {
             if (ch.len < 1) return LexError.UnclosedNestedComment;
             if (state > 0 and ch[0] == '#') nesting -= 1;
             if (state < 0 and ch[0] == '|') nesting += 1;
-            state = if (ch[0] == '|') 1 else if (ch[0] == '#') -1 else 0;
+            state += if (ch[0] == '|') 1 else if (ch[0] == '#') -1 else 0;
+            count += 1;
         }
-        return LexError.InvalidToken;
+        var com: []const u8 = try l.contents_back(count);
+        return TokenValue{ .Comment = com[0 .. count - 2] };
     }
     var count: usize = 0;
     var ch: []const u8 = l.peek(1);
@@ -415,6 +444,21 @@ fn comment(l: *Lexer, nested: bool) !TokenValue {
     return TokenValue{ .Comment = com[1..count] };
 }
 
+test "lex comment" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine(";abc def ghi\nabc");
+    try expectEqualStrings((try comment(&lex, false)).Comment, "abc def ghi");
+    try lex.replLine(";\nabc");
+    try expectEqualStrings((try comment(&lex, false)).Comment, "");
+    try lex.replLine("#||#");
+    try expectEqualStrings((try comment(&lex, true)).Comment, "");
+    try lex.replLine("#|#||#|#");
+    try expectEqualStrings((try comment(&lex, true)).Comment, "#||#");
+    try lex.replLine("#|abc\ndef\nghi\n|#");
+    try expectEqualStrings((try comment(&lex, true)).Comment, "abc\ndef\nghi\n");
+}
+
 fn identifier(l: *Lexer) !TokenValue {
     var reg_ident: usize = try regular_identifier(l);
     if (reg_ident != 0) {
@@ -423,23 +467,229 @@ fn identifier(l: *Lexer) !TokenValue {
     }
     var symbol_ident: usize = try symbol_identifier(l);
     if (symbol_ident != 0) {
-        var ident = try l.contents_back(reg_ident);
-        return TokenValue{ .Identifier = ident };
+        var ident = try l.contents_back(symbol_ident);
+        return TokenValue{ .Identifier = try parseSymbolIdent(l, ident) };
     }
     var peculiar_ident: usize = try peculiar_identifier(l);
     if (peculiar_ident == 0) {
         return LexError.NotIdentifier;
     }
     var ident = try l.contents_back(peculiar_ident);
+    if (actuallyNumber(ident)) {
+        return LexError.NotIdentifier;
+    }
+    return TokenValue{ .Identifier = ident };
+}
+
+test "lex identifier" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+    defer lex.deinit();
+
+    try lex.replLine("abc123");
+    try expectEqualStrings((try identifier(&lex)).Identifier, "abc123");
+    try lex.replLine("+");
+    try expectEqualStrings((try identifier(&lex)).Identifier, "+");
+    try lex.replLine("-");
+    try expectEqualStrings((try identifier(&lex)).Identifier, "-");
+    try lex.replLine("$@?");
+    try expectEqualStrings((try identifier(&lex)).Identifier, "$@?");
+    try lex.replLine("|abc 123 \\n\\x3b|");
+    try expectEqualStrings((try identifier(&lex)).Identifier, "abc 123 \n\x3b");
+    try lex.replLine("+.a1");
+    try expectEqualStrings((try identifier(&lex)).Identifier, "+.a1");
+    try lex.replLine("+ia");
+    try expectEqualStrings((try identifier(&lex)).Identifier, "+ia");
+    try lex.replLine("nan.0");
+    try expectEqualStrings((try identifier(&lex)).Identifier, "nan.0");
+    try lex.replLine("+inf.04");
+    try expectEqualStrings((try identifier(&lex)).Identifier, "+inf.04");
+
+    try lex.replLine("+i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("-i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("+inf.0");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("+nan.0");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("-inf.0i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("-nan.0");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("+inf.0i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("-inf.0i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("+nan.0i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("-nan.0i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("-nan.0+inf.0i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("+nan.0-inf.0i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("+nan.0-3.4i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+    try lex.replLine("-nan.0+4/3i");
+    try expectError(LexError.NotIdentifier, identifier(&lex));
+}
+
+fn actuallyNumber(ident: []const u8) bool {
     if (std.mem.eql(u8, ident, "+i") or std.mem.eql(u8, ident, "-i") or
         std.mem.eql(u8, ident, "+inf.0") or std.mem.eql(u8, ident, "-inf.0") or
         std.mem.eql(u8, ident, "+nan.0") or std.mem.eql(u8, ident, "-nan.0") or
         std.mem.eql(u8, ident, "+inf.0i") or std.mem.eql(u8, ident, "-inf.0i") or
         std.mem.eql(u8, ident, "+nan.0i") or std.mem.eql(u8, ident, "-nan.0i"))
     {
-        return LexError.NotIdentifier;
+        return true;
     }
-    return TokenValue{ .Identifier = ident };
+
+    if (ident.len > 7 and (std.mem.eql(u8, ident[0..6], "+nan.0") or std.mem.eql(u8, ident[0..6], "-nan.0") or
+        std.mem.eql(u8, ident[0..6], "+inf.0") or std.mem.eql(u8, ident[0..6], "-inf.0")) and
+        (ident[6] == '+' or ident[6] == '-' or ident[6] == '@'))
+    {
+        if (std.mem.eql(u8, ident[6..], "+i") or std.mem.eql(u8, ident[6..], "-i") or
+            std.mem.eql(u8, ident[6..], "+inf.0i") or std.mem.eql(u8, ident[6..], "-inf.0i") or
+            std.mem.eql(u8, ident[6..], "+nan.0i") or std.mem.eql(u8, ident[6..], "-nan.0i") or
+            (ident[6] == '@' and (std.mem.eql(u8, ident[7..], "+inf.0") or std.mem.eql(u8, ident[7..], "-inf.0") or
+            std.mem.eql(u8, ident[7..], "+nan.0") or std.mem.eql(u8, ident[7..], "-nan.0"))))
+        {
+            return true;
+        }
+
+        var foundDotSlash: bool = false;
+        for (ident[7..]) |c, i| {
+            if (!digit(c) and ((c != '.' and c != '/') or foundDotSlash) and
+                (c != 'i' or i != ident.len - 8) and (c != '-' or i != 0))
+            {
+                return false;
+            }
+            if (c == '.' or c == '/') foundDotSlash = true;
+        }
+        if (ident[6] == '+' or ident[6] == '-') return ident[ident.len - 1] == 'i';
+        return true;
+    }
+
+    return false;
+}
+
+test "actuallyNumber" {
+    try expect(actuallyNumber("+i"));
+    try expect(actuallyNumber("-i"));
+    try expect(actuallyNumber("+nan.0"));
+    try expect(actuallyNumber("-nan.0"));
+    try expect(actuallyNumber("+inf.0"));
+    try expect(actuallyNumber("-inf.0"));
+    try expect(actuallyNumber("+nan.0i"));
+    try expect(actuallyNumber("-nan.0i"));
+    try expect(actuallyNumber("+inf.0i"));
+    try expect(actuallyNumber("-inf.0i"));
+    try expect(actuallyNumber("+nan.0+i"));
+    try expect(actuallyNumber("-nan.0-i"));
+    try expect(actuallyNumber("+nan.0+nan.0i"));
+    try expect(actuallyNumber("-nan.0-nan.0i"));
+    try expect(actuallyNumber("+inf.0+inf.0i"));
+    try expect(actuallyNumber("-inf.0-inf.0i"));
+    try expect(actuallyNumber("+nan.0-inf.0i"));
+    try expect(actuallyNumber("-nan.0+inf.0i"));
+    try expect(actuallyNumber("+inf.0-nan.0i"));
+    try expect(actuallyNumber("-inf.0+nan.0i"));
+    try expect(actuallyNumber("+nan.0+3.2i"));
+    try expect(actuallyNumber("-nan.0-47i"));
+    try expect(actuallyNumber("+inf.0+3/4i"));
+    try expect(actuallyNumber("-inf.0@+inf.0"));
+    try expect(actuallyNumber("-inf.0@+nan.0"));
+    try expect(actuallyNumber("+nan.0@+inf.0"));
+    try expect(actuallyNumber("-inf.0@7.1"));
+    try expect(actuallyNumber("-inf.0@3/4"));
+    try expect(actuallyNumber("-inf.0@-0.5"));
+    try expect(actuallyNumber("-inf.0@-2/3"));
+
+    try expect(!actuallyNumber("+ia"));
+    try expect(!actuallyNumber("-i2"));
+    try expect(!actuallyNumber("+nan.0w"));
+    try expect(!actuallyNumber("-nan.0534"));
+    try expect(!actuallyNumber("+inf.0.."));
+    try expect(!actuallyNumber("-inf.0/+inf.0"));
+    try expect(!actuallyNumber("nan.0"));
+    try expect(!actuallyNumber("nan.0"));
+    try expect(!actuallyNumber("inf.0"));
+    try expect(!actuallyNumber("inf.0"));
+    try expect(!actuallyNumber("+nan.0+nan.0"));
+    try expect(!actuallyNumber("-nan.0-nan.0"));
+    try expect(!actuallyNumber("+inf.0+inf.0"));
+    try expect(!actuallyNumber("-inf.0-inf.0"));
+    try expect(!actuallyNumber("+nan.0-inf.0"));
+    try expect(!actuallyNumber("-nan.0+inf.0"));
+    try expect(!actuallyNumber("+inf.0-nan.0"));
+    try expect(!actuallyNumber("-inf.0+nan.0"));
+    try expect(!actuallyNumber("+nan.0+3.2"));
+    try expect(!actuallyNumber("-nan.0-47"));
+    try expect(!actuallyNumber("+inf.0+3/4"));
+    try expect(!actuallyNumber("-inf.0@inf.0"));
+    try expect(!actuallyNumber("-inf.0@nan.0"));
+    try expect(!actuallyNumber("+nan.0@inf.0"));
+    try expect(!actuallyNumber("-inf.0@.7.1"));
+    try expect(!actuallyNumber("-inf.0@3/4.0"));
+    try expect(!actuallyNumber("-inf.0@-0.5.1.2"));
+    try expect(!actuallyNumber("-inf.0@--2/3"));
+}
+
+fn parseSymbolIdent(lex: *Lexer, ident: []const u8) ![]const u8 {
+    if (ident.len == 0) return ident;
+    var count: usize = 0;
+    var i: usize = 0;
+    while (i < ident.len) : (i += 1) {
+        if (ident[i] == '\\') {
+            count += 1;
+            switch (ident[i + 1]) {
+                '|', 'a', 'b', 'n', 'r', 't' => i += 1,
+                'x' => i += 3,
+                else => unreachable,
+            }
+        } else {
+            count += if (ident[i] == '|') 0 else 1;
+        }
+    }
+    var newIdent = try lex.allocator.alloc(u8, count);
+    errdefer lex.allocator.free(newIdent);
+
+    i = 1;
+    var j: usize = 0;
+    while (i < ident.len - 1) : (i += 1) {
+        if (ident[i] == '\\') {
+            i += 1;
+            switch (ident[i]) {
+                '|' => newIdent[j] = '|',
+                'a' => newIdent[j] = '\x07',
+                'b' => newIdent[j] = '\x08',
+                'n' => newIdent[j] = '\n',
+                'r' => newIdent[j] = '\r',
+                't' => newIdent[j] = '\t',
+                'x' => {
+                    i += 1;
+                    newIdent[j] = try std.fmt.parseInt(u8, ident[i .. i + 2], 16);
+                    i += 1;
+                },
+                else => unreachable,
+            }
+            j += 1;
+        } else {
+            newIdent[j] = ident[i];
+            j += 1;
+        }
+    }
+
+    try lex.strings.append(newIdent);
+    return newIdent;
+}
+
+test "parseSymbolIdent" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+    defer lex.deinit();
+
+    try expectEqualStrings("abc def 123 456 *&@#()", try parseSymbolIdent(&lex, "|abc def 123 456 *&@#()|"));
+    try expectEqualStrings("|\x0734 \n \x3c", try parseSymbolIdent(&lex, "|\\|\\a34 \\n \\x3c|"));
 }
 
 fn peculiar_identifier(l: *Lexer) !usize {
@@ -483,12 +733,105 @@ fn peculiar_identifier(l: *Lexer) !usize {
     return count;
 }
 
+test "lex peculiar_identifier" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine(".+");
+    try expectEqual(peculiar_identifier(&lex), 2);
+    try lex.replLine("+.+");
+    try expectEqual(peculiar_identifier(&lex), 3);
+    try lex.replLine("-------");
+    try expectEqual(peculiar_identifier(&lex), 7);
+    try lex.replLine("+");
+    try expectEqual(peculiar_identifier(&lex), 1);
+    try lex.replLine("-");
+    try expectEqual(peculiar_identifier(&lex), 1);
+    try lex.replLine("..");
+    try expectEqual(peculiar_identifier(&lex), 2);
+    try lex.replLine(".");
+    try expectError(LexError.NotIdentifier, peculiar_identifier(&lex));
+    try lex.replLine("+.");
+    try expectError(LexError.NotIdentifier, peculiar_identifier(&lex));
+}
+
 fn dot_subsequent(c: u8) bool {
     return sign_subsequent(c) or c == '.';
 }
 
+test "dot_subsequent" {
+    try expect(dot_subsequent('a'));
+    try expect(dot_subsequent('b'));
+    try expect(dot_subsequent('c'));
+    try expect(dot_subsequent('X'));
+    try expect(dot_subsequent('Y'));
+    try expect(dot_subsequent('Z'));
+    try expect(dot_subsequent('!'));
+    try expect(dot_subsequent('$'));
+    try expect(dot_subsequent('%'));
+    try expect(dot_subsequent('&'));
+    try expect(dot_subsequent('*'));
+    try expect(dot_subsequent('/'));
+    try expect(dot_subsequent(':'));
+    try expect(dot_subsequent('<'));
+    try expect(dot_subsequent('='));
+    try expect(dot_subsequent('>'));
+    try expect(dot_subsequent('?'));
+    try expect(dot_subsequent('@'));
+    try expect(dot_subsequent('^'));
+    try expect(dot_subsequent('_'));
+    try expect(dot_subsequent('~'));
+    try expect(dot_subsequent('+'));
+    try expect(dot_subsequent('-'));
+    try expect(dot_subsequent('.'));
+
+    try expect(!dot_subsequent(','));
+    try expect(!dot_subsequent('"'));
+    try expect(!dot_subsequent('('));
+    try expect(!dot_subsequent(')'));
+    try expect(!dot_subsequent('\''));
+    try expect(!dot_subsequent('`'));
+    try expect(!dot_subsequent(';'));
+    try expect(!dot_subsequent('1'));
+}
+
 fn sign_subsequent(c: u8) bool {
     return initial(c) or c == '+' or c == '-' or c == '@';
+}
+
+test "sign_subsequent" {
+    try expect(sign_subsequent('a'));
+    try expect(sign_subsequent('b'));
+    try expect(sign_subsequent('c'));
+    try expect(sign_subsequent('X'));
+    try expect(sign_subsequent('Y'));
+    try expect(sign_subsequent('Z'));
+    try expect(sign_subsequent('!'));
+    try expect(sign_subsequent('$'));
+    try expect(sign_subsequent('%'));
+    try expect(sign_subsequent('&'));
+    try expect(sign_subsequent('*'));
+    try expect(sign_subsequent('/'));
+    try expect(sign_subsequent(':'));
+    try expect(sign_subsequent('<'));
+    try expect(sign_subsequent('='));
+    try expect(sign_subsequent('>'));
+    try expect(sign_subsequent('?'));
+    try expect(sign_subsequent('@'));
+    try expect(sign_subsequent('^'));
+    try expect(sign_subsequent('_'));
+    try expect(sign_subsequent('~'));
+    try expect(sign_subsequent('+'));
+    try expect(sign_subsequent('-'));
+
+    try expect(!sign_subsequent(','));
+    try expect(!sign_subsequent('"'));
+    try expect(!sign_subsequent('('));
+    try expect(!sign_subsequent(')'));
+    try expect(!sign_subsequent('.'));
+    try expect(!sign_subsequent('\''));
+    try expect(!sign_subsequent('`'));
+    try expect(!sign_subsequent(';'));
+    try expect(!sign_subsequent('1'));
 }
 
 fn symbol_identifier(l: *Lexer) !usize {
@@ -497,7 +840,7 @@ fn symbol_identifier(l: *Lexer) !usize {
         return 0;
     }
     try l.forward(1);
-    var count: usize = 0;
+    var count: usize = 1;
     var c: []const u8 = l.peek(1);
     while (c.len > 0 and c[0] != '|') {
         count += c.len;
@@ -536,6 +879,15 @@ fn symbol_identifier(l: *Lexer) !usize {
     return count;
 }
 
+test "symbol_identifier" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("|abc def 123 456 *&@#()|");
+    try expectEqual(symbol_identifier(&lex), 24);
+    try lex.replLine("|\\|\\a34 \\n \\x3c|");
+    try expectEqual(symbol_identifier(&lex), 16);
+}
+
 fn regular_identifier(l: *Lexer) !usize {
     var start: []const u8 = l.peek(1);
     if (start.len < 1) {
@@ -555,8 +907,63 @@ fn regular_identifier(l: *Lexer) !usize {
     return count;
 }
 
+test "lex regular_identifier" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("abc@123");
+    try expectEqual(regular_identifier(&lex), 7);
+    try lex.replLine("<X:&7");
+    try expectEqual(regular_identifier(&lex), 5);
+    try lex.replLine("|abc|");
+    try expectEqual(regular_identifier(&lex), 0);
+    try lex.replLine(".abc");
+    try expectEqual(regular_identifier(&lex), 0);
+    try lex.replLine("1z+2r");
+    try expectEqual(regular_identifier(&lex), 0);
+    try lex.replLine("$$$");
+    try expectEqual(regular_identifier(&lex), 3);
+    try lex.replLine("a(b)");
+    try expectEqual(regular_identifier(&lex), 1);
+}
+
 fn subsequent(c: u8) bool {
     return initial(c) or digit(c) or specialSubsequent(c);
+}
+
+test "subsequent" {
+    try expect(subsequent('a'));
+    try expect(subsequent('b'));
+    try expect(subsequent('c'));
+    try expect(subsequent('X'));
+    try expect(subsequent('Y'));
+    try expect(subsequent('Z'));
+    try expect(subsequent('!'));
+    try expect(subsequent('$'));
+    try expect(subsequent('%'));
+    try expect(subsequent('&'));
+    try expect(subsequent('*'));
+    try expect(subsequent('/'));
+    try expect(subsequent(':'));
+    try expect(subsequent('<'));
+    try expect(subsequent('='));
+    try expect(subsequent('>'));
+    try expect(subsequent('?'));
+    try expect(subsequent('@'));
+    try expect(subsequent('^'));
+    try expect(subsequent('_'));
+    try expect(subsequent('~'));
+    try expect(subsequent('1'));
+    try expect(subsequent('+'));
+    try expect(subsequent('-'));
+    try expect(subsequent('.'));
+
+    try expect(!subsequent(','));
+    try expect(!subsequent('"'));
+    try expect(!subsequent('('));
+    try expect(!subsequent(')'));
+    try expect(!subsequent('\''));
+    try expect(!subsequent('`'));
+    try expect(!subsequent(';'));
 }
 
 fn specialSubsequent(c: u8) bool {
@@ -566,8 +973,60 @@ fn specialSubsequent(c: u8) bool {
     }
 }
 
+test "specialSubsequent" {
+    try expect(specialSubsequent('+'));
+    try expect(specialSubsequent('-'));
+    try expect(specialSubsequent('.'));
+    try expect(specialSubsequent('@'));
+
+    try expect(!specialSubsequent('('));
+    try expect(!specialSubsequent(')'));
+    try expect(!specialSubsequent(';'));
+    try expect(!specialSubsequent(','));
+    try expect(!specialSubsequent('\''));
+    try expect(!specialSubsequent('"'));
+    try expect(!specialSubsequent('`'));
+}
+
 fn initial(c: u8) bool {
     return std.ascii.isAlpha(c) or specialInitial(c);
+}
+
+test "initial" {
+    try expect(initial('a'));
+    try expect(initial('b'));
+    try expect(initial('c'));
+    try expect(initial('X'));
+    try expect(initial('Y'));
+    try expect(initial('Z'));
+    try expect(initial('!'));
+    try expect(initial('$'));
+    try expect(initial('%'));
+    try expect(initial('&'));
+    try expect(initial('*'));
+    try expect(initial('/'));
+    try expect(initial(':'));
+    try expect(initial('<'));
+    try expect(initial('='));
+    try expect(initial('>'));
+    try expect(initial('?'));
+    try expect(initial('@'));
+    try expect(initial('^'));
+    try expect(initial('_'));
+    try expect(initial('~'));
+
+    try expect(!initial(','));
+    try expect(!initial('"'));
+    try expect(!initial('('));
+    try expect(!initial(')'));
+    try expect(!initial('.'));
+    try expect(!initial('\''));
+    try expect(!initial('`'));
+    try expect(!initial(';'));
+    try expect(!initial('|'));
+    try expect(!initial('1'));
+    try expect(!initial('+'));
+    try expect(!initial('-'));
 }
 
 fn specialInitial(c: u8) bool {
@@ -575,6 +1034,38 @@ fn specialInitial(c: u8) bool {
         '!', '$', '%', '&', '*', '/', ':', '<', '=', '>', '?', '@', '^', '_', '~' => return true,
         else => return false,
     }
+}
+
+test "specialInitial" {
+    try expect(specialInitial('!'));
+    try expect(specialInitial('$'));
+    try expect(specialInitial('%'));
+    try expect(specialInitial('&'));
+    try expect(specialInitial('*'));
+    try expect(specialInitial('/'));
+    try expect(specialInitial(':'));
+    try expect(specialInitial('<'));
+    try expect(specialInitial('='));
+    try expect(specialInitial('>'));
+    try expect(specialInitial('?'));
+    try expect(specialInitial('@'));
+    try expect(specialInitial('^'));
+    try expect(specialInitial('_'));
+    try expect(specialInitial('~'));
+
+    try expect(!specialInitial('a'));
+    try expect(!specialInitial('B'));
+    try expect(!specialInitial(','));
+    try expect(!specialInitial('"'));
+    try expect(!specialInitial('('));
+    try expect(!specialInitial(')'));
+    try expect(!specialInitial('.'));
+    try expect(!specialInitial('\''));
+    try expect(!specialInitial('`'));
+    try expect(!specialInitial(';'));
+    try expect(!specialInitial('1'));
+    try expect(!specialInitial('+'));
+    try expect(!specialInitial('-'));
 }
 
 fn boolean(l: *Lexer) !TokenValue {
@@ -599,9 +1090,24 @@ fn boolean(l: *Lexer) !TokenValue {
     return TokenValue{ .BoolLiteral = false };
 }
 
+test "lex boolean" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("#t");
+    try expectEqual(TokenValue{ .BoolLiteral = true }, try boolean(&lex));
+    try lex.replLine("#true");
+    try expectEqual(TokenValue{ .BoolLiteral = true }, try boolean(&lex));
+    try lex.replLine("#f");
+    try expectEqual(TokenValue{ .BoolLiteral = false }, try boolean(&lex));
+    try lex.replLine("#false");
+    try expectEqual(TokenValue{ .BoolLiteral = false }, try boolean(&lex));
+    try lex.replLine("#notabool");
+    try expectError(LexError.NotBool, boolean(&lex));
+}
+
 fn character(l: *Lexer) !TokenValue {
     var hashslash: []const u8 = l.peek(2);
-    if (hashslash.len != 2 or std.mem.eql(u8, hashslash, "#\\")) {
+    if (hashslash.len != 2 or !std.mem.eql(u8, hashslash, "#\\")) {
         return LexError.NotChar;
     }
     try l.forward(2);
@@ -698,6 +1204,52 @@ fn character(l: *Lexer) !TokenValue {
     }
 }
 
+test "lex character" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("#\\a");
+    try expectEqual(TokenValue{ .CharLiteral = 'a' }, try character(&lex));
+
+    try lex.replLine("#\\B");
+    try expectEqual(TokenValue{ .CharLiteral = 'B' }, try character(&lex));
+
+    try lex.replLine("#\\ ");
+    try expectEqual(TokenValue{ .CharLiteral = ' ' }, try character(&lex));
+
+    try lex.replLine("#\\alarm");
+    try expectEqual(TokenValue{ .CharLiteral = '\x07' }, try character(&lex));
+
+    try lex.replLine("#\\backspace");
+    try expectEqual(TokenValue{ .CharLiteral = '\x08' }, try character(&lex));
+
+    try lex.replLine("#\\delete");
+    try expectEqual(TokenValue{ .CharLiteral = '\x7f' }, try character(&lex));
+
+    try lex.replLine("#\\escape");
+    try expectEqual(TokenValue{ .CharLiteral = '\x1b' }, try character(&lex));
+
+    try lex.replLine("#\\newline");
+    try expectEqual(TokenValue{ .CharLiteral = '\n' }, try character(&lex));
+
+    try lex.replLine("#\\null");
+    try expectEqual(TokenValue{ .CharLiteral = 0 }, try character(&lex));
+
+    try lex.replLine("#\\return");
+    try expectEqual(TokenValue{ .CharLiteral = '\r' }, try character(&lex));
+
+    try lex.replLine("#\\space");
+    try expectEqual(TokenValue{ .CharLiteral = ' ' }, try character(&lex));
+
+    try lex.replLine("#\\tab");
+    try expectEqual(TokenValue{ .CharLiteral = '\t' }, try character(&lex));
+
+    try lex.replLine("#\\\\");
+    try expectEqual(TokenValue{ .CharLiteral = '\\' }, try character(&lex));
+
+    try lex.replLine("#\\x08");
+    try expectEqual(TokenValue{ .CharLiteral = '\x08' }, try character(&lex));
+}
+
 fn string(l: *Lexer) !TokenValue {
     var quote: []const u8 = l.peek(1);
     if (quote.len != 1 or quote[0] != '"') {
@@ -730,6 +1282,27 @@ fn string(l: *Lexer) !TokenValue {
     try l.forward(1);
 
     return TokenValue{ .StringLiteral = str };
+}
+
+test "lex string" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+    defer lex.deinit();
+
+    try lex.replLine("\"abc def ghi\"");
+    try expectEqualStrings((try string(&lex)).StringLiteral, "abc def ghi");
+
+    try lex.replLine("\"\"");
+    try expectEqualStrings((try string(&lex)).StringLiteral, "");
+
+    try lex.replLine("\"\\a\\b\\|\"");
+    try expectEqualStrings((try string(&lex)).StringLiteral, "\x07\x08|");
+
+    try lex.replLine(
+        \\"abc\  
+        \\  def
+        \\  "
+    );
+    try expectEqualStrings((try string(&lex)).StringLiteral, "abcdef\n  ");
 }
 
 fn string_element(l: *Lexer) !u8 {
@@ -779,6 +1352,7 @@ fn string_element(l: *Lexer) !u8 {
             return '|';
         },
         'x' => {
+            try l.forward(1);
             var he: []const u8 = l.peek(2);
             if (he.len != 2) {
                 return LexError.ExpectedHexValue;
@@ -800,11 +1374,55 @@ fn string_element(l: *Lexer) !u8 {
     }
 }
 
+test "lex string element" {
+    var lex = Lexer.initRepl(std.testing.allocator);
+
+    try lex.replLine("a");
+    try expectEqual(string_element(&lex), 'a');
+    try lex.replLine("A");
+    try expectEqual(string_element(&lex), 'A');
+    try lex.replLine("2");
+    try expectEqual(string_element(&lex), '2');
+    try lex.replLine(".");
+    try expectEqual(string_element(&lex), '.');
+    try lex.replLine("\\\\");
+    try expectEqual(string_element(&lex), '\\');
+    try lex.replLine("\\n");
+    try expectEqual(string_element(&lex), '\n');
+    try lex.replLine("\\ a");
+    try expectEqual(string_element(&lex), 'a');
+    try lex.replLine("\\\"");
+    try expectEqual(string_element(&lex), '"');
+    try lex.replLine("\\x2b");
+    try expectEqual(string_element(&lex), '\x2b');
+    try lex.replLine("\\");
+    try expectError(LexError.ExpectedEscapedChar, string_element(&lex));
+    try lex.replLine("\\x");
+    try expectError(LexError.ExpectedHexValue, string_element(&lex));
+    try lex.replLine("\\l");
+    try expectError(LexError.NotValidEscape, string_element(&lex));
+}
+
 fn whitespace(c: u8) bool {
     switch (c) {
         ' ', '\t', '\n', '\r' => return true,
         else => return false,
     }
+}
+
+test "lex whitespace" {
+    try expect(whitespace(' '));
+    try expect(whitespace('\t'));
+    try expect(whitespace('\n'));
+    try expect(whitespace('\r'));
+    try expect(!whitespace('a'));
+    try expect(!whitespace('b'));
+    try expect(!whitespace('3'));
+    try expect(!whitespace('N'));
+    try expect(!whitespace(':'));
+    try expect(!whitespace('.'));
+    try expect(!whitespace('\x07'));
+    try expect(!whitespace('\x1b'));
 }
 
 fn number(l: *Lexer) !TokenValue {
