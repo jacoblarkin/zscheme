@@ -284,7 +284,24 @@ fn parseList(parser: *Parser, car: *Expression, quoted: QuoteTag) std.mem.Alloca
     }
     if (parser.peek().value == lex.TokenTag.Cons) {
         // TODO: What to do with '.'?
-        _ = parser.next();
+        var cons = parser.next();
+        var cdr = parseExpr(parser, quoted) orelse {
+            parser.allocator.destroy(cc);
+            parser.printError("Expected cdr after cons.", cons);
+            return car;
+        };
+        while (parser.peek().value == lex.TokenTag.Comment) {
+            _ = parser.next();
+        }
+        if (parser.peek().value != lex.TokenTag.RParen) {
+            parser.printError("Ill formed list. Expected ')' after cdr", parser.peek());
+            while (parser.peek().value != lex.TokenTag.RParen) {
+                _ = parser.next();
+            }
+            _ = parser.next();
+        }
+        cc.* = Expression{ .Cons = ConsCell{ .Car = car, .Cdr = cdr } };
+        return cc;
     }
     var cdr = parseExpr(parser, quoted) orelse {
         parser.allocator.destroy(cc);

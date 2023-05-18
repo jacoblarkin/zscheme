@@ -4,7 +4,7 @@
 
 Current status: 
 - r7rs lexer based on section 7.1.1 of [r7rs spec](https://github.com/johnwcowan/r7rs-spec/blob/errata/spec/r7rs.pdf)
-- parser with exception of `(a . b)` and `(a b c d . e)` expressions
+- parser ~~with exception of `(a . b)` and `(a b c d . e)` expressions~~ (need to test `.`)
 - addition of integers in a tree-walk-interpreter.
 
 # TODO
@@ -13,10 +13,12 @@ This section is incomplete and just of list of things to implement in roughly th
 
 - [x] Lexer
   - [x] Nested Comments
-  - [ ] Tests
+  - [x] Tests
+    - Preliminary unit tests done. Need to write tests for `Lexer.getNextToken`.
   - [ ] Simplification?
 - [x] Parser
-  - [ ] Cons and improper lists
+  - [x] Cons and improper lists
+    - Should be done, but need to test.
   - [ ] Tests
 - [x] Tree-Walk-Interpreter
   - [x] Addition of integers
