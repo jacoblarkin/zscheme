@@ -32,14 +32,205 @@ pub const LispVal = union(LispValTag) {
     ByteVector: std.ArrayList(u8),
     Func: LispFunc,
 
-    fn plusInteger(val: *LispVal, other: i64) LispVal {
-        switch (val.*) {
+    fn plusInteger(val: LispVal, other: i64) LispVal {
+        switch (val) {
             LispValTag.Integer => |v| return LispVal{ .Integer = v + other },
+            LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] + v[1] * other, v[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v + @intToFloat(f64, other) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] + @intToFloat(f64, other), v[1] } },
             else => {
-                std.debug.print("Runtime Error: can only add integers.\n", .{});
-                return val.*;
+                std.debug.print("Runtime Error: can only add numbers.\n", .{});
+                return val;
             },
         }
+    }
+
+    fn plusRational(val: LispVal, other: [2]i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Rational = [2]i64{ v * other[1] + other[0], other[1] } },
+            LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] * other[1] + v[1] * other[0], v[1] * other[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v + @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] + @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]), v[1] } },
+            else => {
+                std.debug.print("Runtime Error: can only add numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn plusReal(val: LispVal, other: f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Real = @intToFloat(f64, v) + other },
+            LispValTag.Rational => |v| return LispVal{ .Real = other + @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]) },
+            LispValTag.Real => |v| return LispVal{ .Real = v + other },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] + other, v[1] } },
+            else => {
+                std.debug.print("Runtime Error: can only add numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn plusComplex(val: LispVal, other: [2]f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Complex = [2]f64{ @intToFloat(f64, v) + other[0], other[1] } },
+            LispValTag.Rational => |v| return LispVal{ .Complex = [2]f64{ other[0] + @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]), other[1] } },
+            LispValTag.Real => |v| return LispVal{ .Complex = [2]f64{ v + other[0], other[1] } },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] + other[0], v[1] + other[1] } },
+            else => {
+                std.debug.print("Runtime Error: can only add numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn minusInteger(val: LispVal, other: i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Integer = v - other },
+            LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] - v[1] * other, v[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v - @intToFloat(f64, other) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] - @intToFloat(f64, other), v[1] } },
+            else => {
+                std.debug.print("Runtime Error: can only add numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn minusRational(val: LispVal, other: [2]i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Rational = [2]i64{ v * other[1] - other[0], other[1] } },
+            LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] * other[1] - v[1] * other[0], v[1] * other[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v - @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] - @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]), v[1] } },
+            else => {
+                std.debug.print("Runtime Error: can only add numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn minusReal(val: LispVal, other: f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Real = @intToFloat(f64, v) - other },
+            LispValTag.Rational => |v| return LispVal{ .Real = @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]) - other },
+            LispValTag.Real => |v| return LispVal{ .Real = v - other },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] - other, v[1] } },
+            else => {
+                std.debug.print("Runtime Error: can only add numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn minusComplex(val: LispVal, other: [2]f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Complex = [2]f64{ @intToFloat(f64, v) - other[0], -other[1] } },
+            LispValTag.Rational => |v| return LispVal{ .Complex = [2]f64{ @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]) - other[0], -other[1] } },
+            LispValTag.Real => |v| return LispVal{ .Complex = [2]f64{ v - other[0], -other[1] } },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] - other[0], v[1] - other[1] } },
+            else => {
+                std.debug.print("Runtime Error: can only add numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn timesInteger(val: LispVal, other: i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Integer = v * other },
+            LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] * other, v[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v * @intToFloat(f64, other) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * @intToFloat(f64, other), v[1] * @intToFloat(f64, other) } },
+            else => {
+                std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn timesRational(val: LispVal, other: [2]i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Rational = [2]i64{ v * other[0], other[1] } },
+            LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] * other[0], v[1] * other[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v * @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]), v[1] * @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]) } },
+            else => {
+                std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn timesReal(val: LispVal, other: f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Real = @intToFloat(f64, v) * other },
+            LispValTag.Rational => |v| return LispVal{ .Real = other * @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]) },
+            LispValTag.Real => |v| return LispVal{ .Real = v * other },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * other, v[1] * other } },
+            else => {
+                std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn timesComplex(val: LispVal, other: [2]f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Complex = [2]f64{ @intToFloat(f64, v) * other[0], @intToFloat(f64, v) * other[1] } },
+            LispValTag.Rational => |v| return LispVal{ .Complex = [2]f64{ other[0] * @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]), other[1] * @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]) } },
+            LispValTag.Real => |v| return LispVal{ .Complex = [2]f64{ v * other[0], v * other[1] } },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * other[0] - v[1] * other[1], v[0] * other[1] + v[1] * other[0] } },
+            else => {
+                std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn divideInteger(val: LispVal, other: i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Rational = [2]i64{ v, other } },
+            LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0], other * v[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v / @intToFloat(f64, other) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] / @intToFloat(f64, other), v[1] / @intToFloat(f64, other) } },
+            else => {
+                std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn divideRational(val: LispVal, other: [2]i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Rational = [2]i64{ v * other[1], other[0] } },
+            LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] * other[1], v[1] * other[0] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v * @intToFloat(f64, other[1]) / @intToFloat(f64, other[0]) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * @intToFloat(f64, other[1]) / @intToFloat(f64, other[0]), v[1] * @intToFloat(f64, other[1]) / @intToFloat(f64, other[0]) } },
+            else => {
+                std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn divideReal(val: LispVal, other: f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Real = @intToFloat(f64, v) / other },
+            LispValTag.Rational => |v| return LispVal{ .Real = @intToFloat(f64, v[0]) / (other * @intToFloat(f64, v[1])) },
+            LispValTag.Real => |v| return LispVal{ .Real = v / other },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] / other, v[1] / other } },
+            else => {
+                std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
+                return val;
+            },
+        }
+    }
+
+    fn divideComplex(val: LispVal, other: [2]f64) LispVal {
+        var otherMag2 = other[0] * other[0] + other[1] * other[1];
+        var otherConj = [2]f64{ other[0], -other[1] };
+        return val.timesComplex(otherConj).divideReal(otherMag2);
     }
 
     pub fn print(val: LispVal) void {
@@ -80,16 +271,100 @@ fn plus(args: ConsStruct) LispVal {
     while (arg.* != LispValTag.Nil) {
         switch (arg.*) {
             LispValTag.Integer => |v| sum = sum.plusInteger(v),
+            LispValTag.Rational => |v| sum = sum.plusRational(v),
+            LispValTag.Real => |v| sum = sum.plusReal(v),
+            LispValTag.Complex => |v| sum = sum.plusComplex(v),
             else => break,
         }
         switch (argsC.Cdr.*) {
             LispValTag.Cons => |c| argsC = c,
             else => break,
         }
-        std.debug.print("Looping!\n", .{});
         arg = argsC.Car;
     }
     return sum;
+}
+
+fn minus(args: ConsStruct) LispVal {
+    var diff = args.Car.*;
+    var cdr = args.Cdr.*;
+    if (cdr == LispValTag.Nil) {
+        return diff.timesInteger(-1);
+    } else if (cdr != LispValTag.Cons) {
+        return diff; // Probably should be a runtime error
+    }
+    var argsC = args.Cdr.Cons;
+    var arg = argsC.Car;
+    while (arg.* != LispValTag.Nil) {
+        switch (arg.*) {
+            LispValTag.Integer => |v| diff = diff.minusInteger(v),
+            LispValTag.Rational => |v| diff = diff.minusRational(v),
+            LispValTag.Real => |v| diff = diff.minusReal(v),
+            LispValTag.Complex => |v| diff = diff.minusComplex(v),
+            else => break,
+        }
+        switch (argsC.Cdr.*) {
+            LispValTag.Cons => |c| argsC = c,
+            else => break,
+        }
+        arg = argsC.Car;
+    }
+    return diff;
+}
+
+fn times(args: ConsStruct) LispVal {
+    var argsC = args;
+    var arg = argsC.Car;
+    var prod = LispVal{ .Integer = 1 };
+    while (arg.* != LispValTag.Nil) {
+        switch (arg.*) {
+            LispValTag.Integer => |v| prod = prod.timesInteger(v),
+            LispValTag.Rational => |v| prod = prod.timesRational(v),
+            LispValTag.Real => |v| prod = prod.timesReal(v),
+            LispValTag.Complex => |v| prod = prod.timesComplex(v),
+            else => break,
+        }
+        switch (argsC.Cdr.*) {
+            LispValTag.Cons => |c| argsC = c,
+            else => break,
+        }
+        arg = argsC.Car;
+    }
+    return prod;
+}
+
+fn divide(args: ConsStruct) LispVal {
+    var quot = args.Car.*;
+    var cdr = args.Cdr.*;
+    if (cdr == LispValTag.Nil) {
+        var unit = LispVal{ .Integer = 1 };
+        return switch (quot) {
+            LispValTag.Integer => |v| unit.divideInteger(v),
+            LispValTag.Rational => |v| unit.divideRational(v),
+            LispValTag.Real => |v| unit.divideReal(v),
+            LispValTag.Complex => |v| unit.divideComplex(v),
+            else => quot,
+        };
+    } else if (cdr != LispValTag.Cons) {
+        return quot; // Probably should be a runtime error
+    }
+    var argsC = args.Cdr.Cons;
+    var arg = argsC.Car;
+    while (arg.* != LispValTag.Nil) {
+        switch (arg.*) {
+            LispValTag.Integer => |v| quot = quot.divideInteger(v),
+            LispValTag.Rational => |v| quot = quot.divideRational(v),
+            LispValTag.Real => |v| quot = quot.divideReal(v),
+            LispValTag.Complex => |v| quot = quot.divideComplex(v),
+            else => break,
+        }
+        switch (argsC.Cdr.*) {
+            LispValTag.Cons => |c| argsC = c,
+            else => break,
+        }
+        arg = argsC.Car;
+    }
+    return quot;
 }
 
 pub const Interpreter = struct {
@@ -98,13 +373,10 @@ pub const Interpreter = struct {
 
     pub fn init(allocator: std.mem.Allocator) !Interpreter {
         var values = std.StringHashMap(LispVal).init(allocator);
-        //var plusPtr = try allocator.create(LispFunc);
-        //plusPtr.* = LispFunc{ .arity = null, .func = plus };
-        var plusPtr = LispFunc{ .arity = null, .func = plus };
-        try values.put("+", LispVal{ .Func = plusPtr });
-        //try values.put("-", LispVal{ .Func = LispFunc{ .arity = null, .func = minus}});
-        //try values.put("*", LispVal{ .Func = LispFunc{ .arity = null, .func = times}});
-        //try values.put("/", LispVal{ .Func = LispFunc{ .arity = null, .func = divide}});
+        try values.put("+", LispVal{ .Func = LispFunc{ .arity = null, .func = plus } });
+        try values.put("-", LispVal{ .Func = LispFunc{ .arity = null, .func = minus } });
+        try values.put("*", LispVal{ .Func = LispFunc{ .arity = null, .func = times } });
+        try values.put("/", LispVal{ .Func = LispFunc{ .arity = null, .func = divide } });
         return Interpreter{
             .allocator = allocator,
             .values = values,
@@ -124,7 +396,7 @@ pub const Interpreter = struct {
 
     pub fn interpret(interpreter: *Interpreter, expr: *const parser.Expression) LispVal {
         return switch (expr.*) {
-            parser.ExpressionTag.BoolLiteral, parser.ExpressionTag.CharLiteral, parser.ExpressionTag.IntegerLiteral, parser.ExpressionTag.RationalLiteral, parser.ExpressionTag.RealLiteral, parser.ExpressionTag.ComplexLiteral, parser.ExpressionTag.StringLiteral, parser.ExpressionTag.ByteVector => interpretLiteral(expr),
+            parser.ExpressionTag.BoolLiteral, parser.ExpressionTag.CharLiteral, parser.ExpressionTag.IntegerLiteral, parser.ExpressionTag.RationalLiteral, parser.ExpressionTag.RealLiteral, parser.ExpressionTag.ComplexLiteral, parser.ExpressionTag.StringLiteral, parser.ExpressionTag.ByteVector => interpretLiteral(interpreter, expr),
             parser.ExpressionTag.Identifier => |ident| interpreter.lookup(ident),
             parser.ExpressionTag.Vector => |v| interpretVector(interpreter, v),
             parser.ExpressionTag.QuotedExpression => |qe| interpretQuoted(interpreter, qe, false),
@@ -132,13 +404,13 @@ pub const Interpreter = struct {
             parser.ExpressionTag.Cons => interpretCons(interpreter, expr),
             parser.ExpressionTag.Nil => LispVal{ .Nil = {} },
             parser.ExpressionTag.UnquotedElement => |e| interpreter.interpret(e),
-            //else => unreachable,
         };
     }
 };
 
-fn interpretLiteral(expr: *const parser.Expression) LispVal {
+fn interpretLiteral(interpreter: *Interpreter, expr: *const parser.Expression) LispVal {
     return switch (expr.*) {
+        parser.ExpressionTag.Nil => LispVal{ .Nil = {} },
         parser.ExpressionTag.Identifier => |ident| LispVal{ .Symbol = ident },
         parser.ExpressionTag.BoolLiteral => |b| LispVal{ .Bool = b },
         parser.ExpressionTag.CharLiteral => |c| LispVal{ .Char = c },
@@ -148,6 +420,7 @@ fn interpretLiteral(expr: *const parser.Expression) LispVal {
         parser.ExpressionTag.ComplexLiteral => |c| LispVal{ .Complex = c },
         parser.ExpressionTag.StringLiteral => |s| LispVal{ .String = s },
         parser.ExpressionTag.ByteVector => |bv| LispVal{ .ByteVector = bv },
+        parser.ExpressionTag.QuotedExpression => |qe| interpretQuoted(interpreter, qe, false),
         else => unreachable,
     };
 }
@@ -162,9 +435,19 @@ fn interpretVector(interpreter: *Interpreter, v: std.ArrayList(*parser.Expressio
 
 fn interpretQuoted(interpreter: *Interpreter, expr: *const parser.Expression, quasi: bool) LispVal {
     if (expr.* == parser.ExpressionTag.Cons and !quasi) {
-        return LispVal{ .Nil = {} };
+        var car = interpreter.allocator.create(LispVal) catch {
+            std.debug.print("Runtime Error: Memory allocation failed.", .{});
+            return LispVal{ .Nil = {} };
+        };
+        var cdr = interpreter.allocator.create(LispVal) catch {
+            std.debug.print("Runtime Error: Memory allocation failed.", .{});
+            return LispVal{ .Nil = {} };
+        };
+        car.* = interpretQuoted(interpreter, expr.Cons.Car, quasi);
+        cdr.* = interpretQuoted(interpreter, expr.Cons.Cdr, quasi);
+        return LispVal{ .Cons = ConsStruct{ .Car = car, .Cdr = cdr } };
     }
-    return interpreter.interpret(expr);
+    return interpretLiteral(interpreter, expr);
 }
 
 fn interpretCons(interpreter: *Interpreter, expr: *const parser.Expression) LispVal {
@@ -173,7 +456,6 @@ fn interpretCons(interpreter: *Interpreter, expr: *const parser.Expression) Lisp
 }
 
 fn apply(interpreter: *Interpreter, funcVal: LispVal, args: *const parser.Expression) LispVal {
-    //var func = funcVal.Func.*;
     var func = funcVal.Func;
     var arguments = args;
     var empty: ConsStruct = ConsStruct{
