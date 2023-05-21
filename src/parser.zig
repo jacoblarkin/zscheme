@@ -97,6 +97,7 @@ pub const Parser = struct {
                 std.debug.print("{s}\n", .{lex.Lexer.errorMsg(err)});
                 continue;
             };
+            //std.debug.print("{}", .{ret});
             break ret;
         } else lex.Token.default();
         parser.peekedToken = tok;
@@ -208,6 +209,7 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
                     return null;
                 };
             }
+            _ = parser.next();
             expr.* = Expression{ .Vector = vec };
         },
         lex.TokenTag.ByteVectorBegin => {
@@ -247,6 +249,7 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
                     },
                 }
             }
+            _ = parser.next();
             expr.* = Expression{ .ByteVector = bv };
         },
         lex.TokenTag.RParen => {

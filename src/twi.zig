@@ -236,7 +236,7 @@ pub const LispVal = union(LispValTag) {
     pub fn print(val: LispVal) void {
         switch (val) {
             .Nil => std.debug.print("Nil", .{}),
-            .Bool => |b| std.debug.print("{d}", .{@boolToInt(b)}),
+            .Bool => |b| std.debug.print("{s}", .{if (b) "#t" else "#f"}),
             .Char => |c| std.debug.print("{c}", .{c}),
             .Integer => |i| std.debug.print("{d}", .{i}),
             .Rational => |r| std.debug.print("{d}/{d}", .{ r[0], r[1] }),
@@ -244,10 +244,37 @@ pub const LispVal = union(LispValTag) {
             .Complex => |c| std.debug.print("{d} + {d}i", .{ c[0], c[1] }),
             .String => |s| std.debug.print("\"{s}\"", .{s}),
             .Symbol => |s| std.debug.print("{s}", .{s}),
-            .Cons => std.debug.print("<cons>", .{}),
-            .Vector => std.debug.print("<vector>", .{}),
-            .ByteVector => std.debug.print("<bytevector>", .{}),
-            .Func => std.debug.print("<function>", .{}),
+            .Cons => |c| {
+                std.debug.print("(", .{});
+                var cons = c;
+                while (true) {
+                    cons.Car.print();
+                    std.debug.print(" ", .{});
+                    switch (cons.Cdr.*) {
+                        LispValTag.Nil => break,
+                        LispValTag.Cons => |nc| cons = nc,
+                        else => cons.Cdr.print(),
+                    }
+                }
+                std.debug.print(")", .{});
+            },
+            .Vector => |v| {
+                std.debug.print("#(", .{});
+                for (v.items) |e, i| {
+                    if (i != 0) std.debug.print(" ", .{});
+                    e.print();
+                }
+                std.debug.print(")", .{});
+            },
+            .ByteVector => |v| {
+                std.debug.print("#u8(", .{});
+                for (v.items) |e, i| {
+                    if (i != 0) std.debug.print(" ", .{});
+                    std.debug.print("{d}", .{e});
+                }
+                std.debug.print(")", .{});
+            },
+            .Func => |f| std.debug.print("<function: {s}>", .{f.name}),
         }
     }
 };
@@ -258,6 +285,7 @@ pub const ConsStruct = struct {
 };
 
 pub const LispFunc = struct {
+    name: []const u8,
     arity: ?usize,
     func: *const fn (ConsStruct) LispVal,
 };
@@ -373,10 +401,10 @@ pub const Interpreter = struct {
 
     pub fn init(allocator: std.mem.Allocator) !Interpreter {
         var values = std.StringHashMap(LispVal).init(allocator);
-        try values.put("+", LispVal{ .Func = LispFunc{ .arity = null, .func = plus } });
-        try values.put("-", LispVal{ .Func = LispFunc{ .arity = null, .func = minus } });
-        try values.put("*", LispVal{ .Func = LispFunc{ .arity = null, .func = times } });
-        try values.put("/", LispVal{ .Func = LispFunc{ .arity = null, .func = divide } });
+        try values.put("+", LispVal{ .Func = LispFunc{ .name = "+", .arity = null, .func = plus } });
+        try values.put("-", LispVal{ .Func = LispFunc{ .name = "-", .arity = null, .func = minus } });
+        try values.put("*", LispVal{ .Func = LispFunc{ .name = "*", .arity = null, .func = times } });
+        try values.put("/", LispVal{ .Func = LispFunc{ .name = "/", .arity = null, .func = divide } });
         return Interpreter{
             .allocator = allocator,
             .values = values,
