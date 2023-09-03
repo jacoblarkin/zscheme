@@ -36,8 +36,8 @@ pub const LispVal = union(LispValTag) {
         switch (val) {
             LispValTag.Integer => |v| return LispVal{ .Integer = v + other },
             LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] + v[1] * other, v[1] } },
-            LispValTag.Real => |v| return LispVal{ .Real = v + @intToFloat(f64, other) },
-            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] + @intToFloat(f64, other), v[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v + @as(f64, @floatFromInt(other)) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] + @as(f64, @floatFromInt(other)), v[1] } },
             else => {
                 std.debug.print("Runtime Error: can only add numbers.\n", .{});
                 return val;
@@ -49,8 +49,8 @@ pub const LispVal = union(LispValTag) {
         switch (val) {
             LispValTag.Integer => |v| return LispVal{ .Rational = [2]i64{ v * other[1] + other[0], other[1] } },
             LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] * other[1] + v[1] * other[0], v[1] * other[1] } },
-            LispValTag.Real => |v| return LispVal{ .Real = v + @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]) },
-            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] + @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]), v[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v + @as(f64, @floatFromInt(other[0])) / @as(f64, @floatFromInt(other[1])) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] + @as(f64, @floatFromInt(other[0])) / @as(f64, @floatFromInt(other[1])), v[1] } },
             else => {
                 std.debug.print("Runtime Error: can only add numbers.\n", .{});
                 return val;
@@ -60,8 +60,8 @@ pub const LispVal = union(LispValTag) {
 
     fn plusReal(val: LispVal, other: f64) LispVal {
         switch (val) {
-            LispValTag.Integer => |v| return LispVal{ .Real = @intToFloat(f64, v) + other },
-            LispValTag.Rational => |v| return LispVal{ .Real = other + @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]) },
+            LispValTag.Integer => |v| return LispVal{ .Real = @as(f64, @floatFromInt(v)) + other },
+            LispValTag.Rational => |v| return LispVal{ .Real = other + @as(f64, @floatFromInt(v[0])) / @as(f64, @floatFromInt(v[1])) },
             LispValTag.Real => |v| return LispVal{ .Real = v + other },
             LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] + other, v[1] } },
             else => {
@@ -73,8 +73,8 @@ pub const LispVal = union(LispValTag) {
 
     fn plusComplex(val: LispVal, other: [2]f64) LispVal {
         switch (val) {
-            LispValTag.Integer => |v| return LispVal{ .Complex = [2]f64{ @intToFloat(f64, v) + other[0], other[1] } },
-            LispValTag.Rational => |v| return LispVal{ .Complex = [2]f64{ other[0] + @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]), other[1] } },
+            LispValTag.Integer => |v| return LispVal{ .Complex = [2]f64{ @as(f64, @floatFromInt(v)) + other[0], other[1] } },
+            LispValTag.Rational => |v| return LispVal{ .Complex = [2]f64{ other[0] + @as(f64, @floatFromInt(v[0])) / @as(f64, @floatFromInt(v[1])), other[1] } },
             LispValTag.Real => |v| return LispVal{ .Complex = [2]f64{ v + other[0], other[1] } },
             LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] + other[0], v[1] + other[1] } },
             else => {
@@ -88,8 +88,8 @@ pub const LispVal = union(LispValTag) {
         switch (val) {
             LispValTag.Integer => |v| return LispVal{ .Integer = v - other },
             LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] - v[1] * other, v[1] } },
-            LispValTag.Real => |v| return LispVal{ .Real = v - @intToFloat(f64, other) },
-            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] - @intToFloat(f64, other), v[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v - @as(f64, @floatFromInt(other)) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] - @as(f64, @floatFromInt(other)), v[1] } },
             else => {
                 std.debug.print("Runtime Error: can only add numbers.\n", .{});
                 return val;
@@ -101,8 +101,8 @@ pub const LispVal = union(LispValTag) {
         switch (val) {
             LispValTag.Integer => |v| return LispVal{ .Rational = [2]i64{ v * other[1] - other[0], other[1] } },
             LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] * other[1] - v[1] * other[0], v[1] * other[1] } },
-            LispValTag.Real => |v| return LispVal{ .Real = v - @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]) },
-            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] - @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]), v[1] } },
+            LispValTag.Real => |v| return LispVal{ .Real = v - @as(f64, @floatFromInt(other[0])) / @as(f64, @floatFromInt(other[1])) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] - @as(f64, @floatFromInt(other[0])) / @as(f64, @floatFromInt(other[1])), v[1] } },
             else => {
                 std.debug.print("Runtime Error: can only add numbers.\n", .{});
                 return val;
@@ -112,8 +112,8 @@ pub const LispVal = union(LispValTag) {
 
     fn minusReal(val: LispVal, other: f64) LispVal {
         switch (val) {
-            LispValTag.Integer => |v| return LispVal{ .Real = @intToFloat(f64, v) - other },
-            LispValTag.Rational => |v| return LispVal{ .Real = @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]) - other },
+            LispValTag.Integer => |v| return LispVal{ .Real = @as(f64, @floatFromInt(v)) - other },
+            LispValTag.Rational => |v| return LispVal{ .Real = @as(f64, @floatFromInt(v[0])) / @as(f64, @floatFromInt(v[1])) - other },
             LispValTag.Real => |v| return LispVal{ .Real = v - other },
             LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] - other, v[1] } },
             else => {
@@ -125,8 +125,8 @@ pub const LispVal = union(LispValTag) {
 
     fn minusComplex(val: LispVal, other: [2]f64) LispVal {
         switch (val) {
-            LispValTag.Integer => |v| return LispVal{ .Complex = [2]f64{ @intToFloat(f64, v) - other[0], -other[1] } },
-            LispValTag.Rational => |v| return LispVal{ .Complex = [2]f64{ @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]) - other[0], -other[1] } },
+            LispValTag.Integer => |v| return LispVal{ .Complex = [2]f64{ @as(f64, @floatFromInt(v)) - other[0], -other[1] } },
+            LispValTag.Rational => |v| return LispVal{ .Complex = [2]f64{ @as(f64, @floatFromInt(v[0])) / @as(f64, @floatFromInt(v[1])) - other[0], -other[1] } },
             LispValTag.Real => |v| return LispVal{ .Complex = [2]f64{ v - other[0], -other[1] } },
             LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] - other[0], v[1] - other[1] } },
             else => {
@@ -140,8 +140,8 @@ pub const LispVal = union(LispValTag) {
         switch (val) {
             LispValTag.Integer => |v| return LispVal{ .Integer = v * other },
             LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] * other, v[1] } },
-            LispValTag.Real => |v| return LispVal{ .Real = v * @intToFloat(f64, other) },
-            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * @intToFloat(f64, other), v[1] * @intToFloat(f64, other) } },
+            LispValTag.Real => |v| return LispVal{ .Real = v * @as(f64, @floatFromInt(other)) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * @as(f64, @floatFromInt(other)), v[1] * @as(f64, @floatFromInt(other)) } },
             else => {
                 std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
                 return val;
@@ -153,8 +153,8 @@ pub const LispVal = union(LispValTag) {
         switch (val) {
             LispValTag.Integer => |v| return LispVal{ .Rational = [2]i64{ v * other[0], other[1] } },
             LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] * other[0], v[1] * other[1] } },
-            LispValTag.Real => |v| return LispVal{ .Real = v * @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]) },
-            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]), v[1] * @intToFloat(f64, other[0]) / @intToFloat(f64, other[1]) } },
+            LispValTag.Real => |v| return LispVal{ .Real = v * @as(f64, @floatFromInt(other[0])) / @as(f64, @floatFromInt(other[1])) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * @as(f64, @floatFromInt(other[0])) / @as(f64, @floatFromInt(other[1])), v[1] * @as(f64, @floatFromInt(other[0])) / @as(f64, @floatFromInt(other[1])) } },
             else => {
                 std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
                 return val;
@@ -164,8 +164,8 @@ pub const LispVal = union(LispValTag) {
 
     fn timesReal(val: LispVal, other: f64) LispVal {
         switch (val) {
-            LispValTag.Integer => |v| return LispVal{ .Real = @intToFloat(f64, v) * other },
-            LispValTag.Rational => |v| return LispVal{ .Real = other * @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]) },
+            LispValTag.Integer => |v| return LispVal{ .Real = @as(f64, @floatFromInt(v)) * other },
+            LispValTag.Rational => |v| return LispVal{ .Real = other * @as(f64, @floatFromInt(v[0])) / @as(f64, @floatFromInt(v[1])) },
             LispValTag.Real => |v| return LispVal{ .Real = v * other },
             LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * other, v[1] * other } },
             else => {
@@ -177,8 +177,8 @@ pub const LispVal = union(LispValTag) {
 
     fn timesComplex(val: LispVal, other: [2]f64) LispVal {
         switch (val) {
-            LispValTag.Integer => |v| return LispVal{ .Complex = [2]f64{ @intToFloat(f64, v) * other[0], @intToFloat(f64, v) * other[1] } },
-            LispValTag.Rational => |v| return LispVal{ .Complex = [2]f64{ other[0] * @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]), other[1] * @intToFloat(f64, v[0]) / @intToFloat(f64, v[1]) } },
+            LispValTag.Integer => |v| return LispVal{ .Complex = [2]f64{ @as(f64, @floatFromInt(v)) * other[0], @as(f64, @floatFromInt(v)) * other[1] } },
+            LispValTag.Rational => |v| return LispVal{ .Complex = [2]f64{ other[0] * @as(f64, @floatFromInt(v[0])) / @as(f64, @floatFromInt(v[1])), other[1] * @as(f64, @floatFromInt(v[0])) / @as(f64, @floatFromInt(v[1])) } },
             LispValTag.Real => |v| return LispVal{ .Complex = [2]f64{ v * other[0], v * other[1] } },
             LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * other[0] - v[1] * other[1], v[0] * other[1] + v[1] * other[0] } },
             else => {
@@ -192,8 +192,8 @@ pub const LispVal = union(LispValTag) {
         switch (val) {
             LispValTag.Integer => |v| return LispVal{ .Rational = [2]i64{ v, other } },
             LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0], other * v[1] } },
-            LispValTag.Real => |v| return LispVal{ .Real = v / @intToFloat(f64, other) },
-            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] / @intToFloat(f64, other), v[1] / @intToFloat(f64, other) } },
+            LispValTag.Real => |v| return LispVal{ .Real = v / @as(f64, @floatFromInt(other)) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] / @as(f64, @floatFromInt(other)), v[1] / @as(f64, @floatFromInt(other)) } },
             else => {
                 std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
                 return val;
@@ -205,8 +205,8 @@ pub const LispVal = union(LispValTag) {
         switch (val) {
             LispValTag.Integer => |v| return LispVal{ .Rational = [2]i64{ v * other[1], other[0] } },
             LispValTag.Rational => |v| return LispVal{ .Rational = [2]i64{ v[0] * other[1], v[1] * other[0] } },
-            LispValTag.Real => |v| return LispVal{ .Real = v * @intToFloat(f64, other[1]) / @intToFloat(f64, other[0]) },
-            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * @intToFloat(f64, other[1]) / @intToFloat(f64, other[0]), v[1] * @intToFloat(f64, other[1]) / @intToFloat(f64, other[0]) } },
+            LispValTag.Real => |v| return LispVal{ .Real = v * @as(f64, @floatFromInt(other[1])) / @as(f64, @floatFromInt(other[0])) },
+            LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] * @as(f64, @floatFromInt(other[1])) / @as(f64, @floatFromInt(other[0])), v[1] * @as(f64, @floatFromInt(other[1])) / @as(f64, @floatFromInt(other[0])) } },
             else => {
                 std.debug.print("Runtime Error: can only multiply numbers.\n", .{});
                 return val;
@@ -216,8 +216,8 @@ pub const LispVal = union(LispValTag) {
 
     fn divideReal(val: LispVal, other: f64) LispVal {
         switch (val) {
-            LispValTag.Integer => |v| return LispVal{ .Real = @intToFloat(f64, v) / other },
-            LispValTag.Rational => |v| return LispVal{ .Real = @intToFloat(f64, v[0]) / (other * @intToFloat(f64, v[1])) },
+            LispValTag.Integer => |v| return LispVal{ .Real = @as(f64, @floatFromInt(v)) / other },
+            LispValTag.Rational => |v| return LispVal{ .Real = @as(f64, @floatFromInt(v[0])) / (other * @as(f64, @floatFromInt(v[1]))) },
             LispValTag.Real => |v| return LispVal{ .Real = v / other },
             LispValTag.Complex => |v| return LispVal{ .Complex = [2]f64{ v[0] / other, v[1] / other } },
             else => {
@@ -260,7 +260,7 @@ pub const LispVal = union(LispValTag) {
             },
             .Vector => |v| {
                 std.debug.print("#(", .{});
-                for (v.items) |e, i| {
+                for (v.items, 0..) |e, i| {
                     if (i != 0) std.debug.print(" ", .{});
                     e.print();
                 }
@@ -268,7 +268,7 @@ pub const LispVal = union(LispValTag) {
             },
             .ByteVector => |v| {
                 std.debug.print("#u8(", .{});
-                for (v.items) |e, i| {
+                for (v.items, 0..) |e, i| {
                     if (i != 0) std.debug.print(" ", .{});
                     std.debug.print("{d}", .{e});
                 }

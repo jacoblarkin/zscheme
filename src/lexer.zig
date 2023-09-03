@@ -558,7 +558,7 @@ fn actuallyNumber(ident: []const u8) bool {
         }
 
         var foundDotSlash: bool = false;
-        for (ident[7..]) |c, i| {
+        for (ident[7..], 0..) |c, i| {
             if (!digit(c) and ((c != '.' and c != '/') or foundDotSlash) and
                 (c != 'i' or i != ident.len - 8) and (c != '-' or i != 0))
             {
@@ -989,7 +989,7 @@ test "specialSubsequent" {
 }
 
 fn initial(c: u8) bool {
-    return std.ascii.isAlpha(c) or specialInitial(c);
+    return std.ascii.isAlphabetic(c) or specialInitial(c);
 }
 
 test "initial" {
@@ -1477,14 +1477,14 @@ fn complex(comptime n: i8, l: *Lexer) !TokenValue {
             try l.forward(1);
             var tok_exp: TokenValue = try realN(n, l);
             var coeff: f64 = switch (tok_real) {
-                TokenTag.IntegerLiteral => |val| @intToFloat(f64, val),
-                TokenTag.RationalLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
+                TokenTag.IntegerLiteral => |val| @as(f64, @floatFromInt(val)),
+                TokenTag.RationalLiteral => |vals| @as(f64, @floatFromInt(vals[0])) / @as(f64, @floatFromInt(vals[1])),
                 TokenTag.RealLiteral => |val| val,
                 else => unreachable,
             };
             var angle: f64 = switch (tok_exp) {
-                TokenTag.IntegerLiteral => |val| @intToFloat(f64, val),
-                TokenTag.RationalLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
+                TokenTag.IntegerLiteral => |val| @as(f64, @floatFromInt(val)),
+                TokenTag.RationalLiteral => |vals| @as(f64, @floatFromInt(vals[0])) / @as(f64, @floatFromInt(vals[1])),
                 TokenTag.RealLiteral => |val| val,
                 else => unreachable,
             };
@@ -1506,14 +1506,14 @@ fn complex(comptime n: i8, l: *Lexer) !TokenValue {
             }
             try l.forward(1);
             var real: f64 = switch (tok_real) {
-                TokenTag.IntegerLiteral => |val| @intToFloat(f64, val),
-                TokenTag.RationalLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
+                TokenTag.IntegerLiteral => |val| @as(f64, @floatFromInt(val)),
+                TokenTag.RationalLiteral => |vals| @as(f64, @floatFromInt(vals[0])) / @as(f64, @floatFromInt(vals[1])),
                 TokenTag.RealLiteral => |val| val,
                 else => unreachable,
             };
             var imag: f64 = switch (tok_imag) {
-                TokenTag.IntegerLiteral => |val| @intToFloat(f64, val),
-                TokenTag.RationalLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
+                TokenTag.IntegerLiteral => |val| @as(f64, @floatFromInt(val)),
+                TokenTag.RationalLiteral => |vals| @as(f64, @floatFromInt(vals[0])) / @as(f64, @floatFromInt(vals[1])),
                 TokenTag.RealLiteral => |val| val,
                 else => unreachable,
             };
@@ -1524,8 +1524,8 @@ fn complex(comptime n: i8, l: *Lexer) !TokenValue {
         'i' => {
             try l.forward(1);
             var imag: f64 = switch (tok_real) {
-                TokenTag.IntegerLiteral => |val| @intToFloat(f64, val),
-                TokenTag.RationalLiteral => |vals| @intToFloat(f64, vals[0]) / @intToFloat(f64, vals[1]),
+                TokenTag.IntegerLiteral => |val| @as(f64, @floatFromInt(val)),
+                TokenTag.RationalLiteral => |vals| @as(f64, @floatFromInt(vals[0])) / @as(f64, @floatFromInt(vals[1])),
                 TokenTag.RealLiteral => |val| val,
                 else => unreachable,
             };

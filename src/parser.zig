@@ -231,7 +231,7 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
                             parser.printError("Invalid element in byte vector", tok);
                             return null;
                         }
-                        bv.append(@intCast(u8, num)) catch {
+                        bv.append(@intCast(num)) catch {
                             bv.deinit();
                             parser.allocator.destroy(expr);
                             parser.hadError = true;
