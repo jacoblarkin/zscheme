@@ -115,7 +115,7 @@ pub const Lexer = struct {
         defer file.close();
 
         const limit = std.math.maxInt(u32);
-        var contents = try file.readToEndAlloc(allocator, limit);
+        const contents = try file.readToEndAlloc(allocator, limit);
 
         return Lexer{
             .filename = filename,
@@ -193,7 +193,7 @@ pub const Lexer = struct {
     fn forward(l: *Lexer, n: usize) !void {
         var count = n;
         while (count > 0) {
-            var cp: u21 = l.contents_iter.nextCodepoint() orelse return LexError.RanOutOfCodepoints;
+            const cp: u21 = l.contents_iter.nextCodepoint() orelse return LexError.RanOutOfCodepoints;
             l.position += 1;
             if (cp == '\n') {
                 l.line += 1;
@@ -206,7 +206,7 @@ pub const Lexer = struct {
     }
 
     fn next(l: *Lexer, n: usize) ![]const u8 {
-        var ret: []const u8 = l.peek(n);
+        const ret: []const u8 = l.peek(n);
         try l.forward(n);
         return ret;
     }
@@ -219,7 +219,7 @@ pub const Lexer = struct {
         if (n > l.position) {
             return LexError.RequestLargerThanPosition;
         }
-        var start: usize = l.position - n;
+        const start: usize = l.position - n;
         return l.contents[start..l.position];
     }
 
@@ -275,7 +275,7 @@ pub const Lexer = struct {
                 return tok;
             },
             '.' => {
-                var firstTwo: []const u8 = l.peek(2);
+                const firstTwo: []const u8 = l.peek(2);
                 if (firstTwo.len == 1 or (firstTwo.len == 2 and
                     !(digit(firstTwo[1]) or dot_subsequent(firstTwo[1]))))
                 {
@@ -291,7 +291,7 @@ pub const Lexer = struct {
                 }
             },
             ',' => {
-                var firstTwo: []const u8 = l.peek(2);
+                const firstTwo: []const u8 = l.peek(2);
                 if (firstTwo.len == 2 and firstTwo[1] == '@') {
                     try l.forward(2);
                     tok.value = TokenValue{ .CommaAt = {} };
@@ -309,7 +309,7 @@ pub const Lexer = struct {
                 return tok;
             },
             '#' => {
-                var firstTwo: []const u8 = l.peek(2);
+                const firstTwo: []const u8 = l.peek(2);
                 if (firstTwo.len != 2) {
                     return LexError.ExpectedCharacter;
                 }
@@ -334,7 +334,7 @@ pub const Lexer = struct {
                         return tok;
                     },
                     'u' => {
-                        var firstFour: []const u8 = l.peek(4);
+                        const firstFour: []const u8 = l.peek(4);
                         if (firstFour.len != 4 or !std.mem.eql(u8, firstFour, "#u8(")) {
                             return LexError.InvalidToken;
                         }
@@ -359,7 +359,7 @@ pub const Lexer = struct {
                 tok.contents = try l.contents_back(l.position - tok.position);
             },
             '+', '-' => {
-                var firstTwo: []const u8 = l.peek(2);
+                const firstTwo: []const u8 = l.peek(2);
                 if (firstTwo.len == 2 and digit(firstTwo[1])) {
                     tok.value = try number(l);
                     tok.contents = try l.contents_back(l.position - tok.position);
@@ -373,7 +373,7 @@ pub const Lexer = struct {
                 tok.contents = try l.contents_back(l.position - tok.position);
             },
         }
-        var del: []const u8 = l.peek(1);
+        const del: []const u8 = l.peek(1);
         if (del.len > 0 and !delimeter(del[0])) {
             std.debug.print("Delimeter: {s}\n", .{del});
             return LexError.ExpectedDelimeter;
@@ -460,21 +460,21 @@ test "lex comment" {
 }
 
 fn identifier(l: *Lexer) !TokenValue {
-    var reg_ident: usize = try regular_identifier(l);
+    const reg_ident: usize = try regular_identifier(l);
     if (reg_ident != 0) {
-        var ident = try l.contents_back(reg_ident);
+        const ident = try l.contents_back(reg_ident);
         return TokenValue{ .Identifier = ident };
     }
-    var symbol_ident: usize = try symbol_identifier(l);
+    const symbol_ident: usize = try symbol_identifier(l);
     if (symbol_ident != 0) {
-        var ident = try l.contents_back(symbol_ident);
+        const ident = try l.contents_back(symbol_ident);
         return TokenValue{ .Identifier = try parseSymbolIdent(l, ident) };
     }
-    var peculiar_ident: usize = try peculiar_identifier(l);
+    const peculiar_ident: usize = try peculiar_identifier(l);
     if (peculiar_ident == 0) {
         return LexError.NotIdentifier;
     }
-    var ident = try l.contents_back(peculiar_ident);
+    const ident = try l.contents_back(peculiar_ident);
     if (actuallyNumber(ident)) {
         return LexError.NotIdentifier;
     }
@@ -693,7 +693,7 @@ test "parseSymbolIdent" {
 }
 
 fn peculiar_identifier(l: *Lexer) !usize {
-    var init: []const u8 = l.peek(1);
+    const init: []const u8 = l.peek(1);
     if (init.len != 1 or (init[0] != '+' and init[0] != '-' and init[0] != '.')) {
         return 0;
     }
@@ -717,7 +717,7 @@ fn peculiar_identifier(l: *Lexer) !usize {
             count += 1;
         }
     } else {
-        var next_c = l.peek(1);
+        const next_c = l.peek(1);
         if (next_c.len != 1 or !dot_subsequent(next_c[0])) {
             return LexError.NotIdentifier;
         }
@@ -835,7 +835,7 @@ test "sign_subsequent" {
 }
 
 fn symbol_identifier(l: *Lexer) !usize {
-    var vert: []const u8 = l.peek(1);
+    const vert: []const u8 = l.peek(1);
     if (vert.len != 1 or vert[0] != '|') {
         return 0;
     }
@@ -858,7 +858,7 @@ fn symbol_identifier(l: *Lexer) !usize {
                 'x' => {
                     count += 1;
                     try l.forward(1);
-                    var hexseq = l.peek(2);
+                    const hexseq = l.peek(2);
                     if (hexseq.len != 2 or !digitN(16, hexseq[0]) or !digitN(16, hexseq[1])) {
                         return LexError.ExpectedHexValue;
                     }
@@ -889,7 +889,7 @@ test "symbol_identifier" {
 }
 
 fn regular_identifier(l: *Lexer) !usize {
-    var start: []const u8 = l.peek(1);
+    const start: []const u8 = l.peek(1);
     if (start.len < 1) {
         return LexError.ExpectedCharacter;
     }
@@ -1106,13 +1106,13 @@ test "lex boolean" {
 }
 
 fn character(l: *Lexer) !TokenValue {
-    var hashslash: []const u8 = l.peek(2);
+    const hashslash: []const u8 = l.peek(2);
     if (hashslash.len != 2 or !std.mem.eql(u8, hashslash, "#\\")) {
         return LexError.NotChar;
     }
     try l.forward(2);
 
-    var nexttwo: []const u8 = l.peek(2);
+    const nexttwo: []const u8 = l.peek(2);
     if (nexttwo.len == 0) {
         return LexError.NotChar;
     }
@@ -1121,7 +1121,7 @@ fn character(l: *Lexer) !TokenValue {
         return TokenValue{ .CharLiteral = nexttwo[0] };
     }
     if (std.mem.eql(u8, nexttwo, "al")) {
-        var alarm = l.peek(5);
+        const alarm = l.peek(5);
         if (std.mem.eql(u8, alarm, "alarm")) {
             try l.forward(5);
             return TokenValue{ .CharLiteral = '\x07' };
@@ -1129,7 +1129,7 @@ fn character(l: *Lexer) !TokenValue {
         try l.forward(1);
         return TokenValue{ .CharLiteral = 'a' };
     } else if (std.mem.eql(u8, nexttwo, "ba")) {
-        var backspace = l.peek(9);
+        const backspace = l.peek(9);
         if (std.mem.eql(u8, backspace, "backspace")) {
             try l.forward(9);
             return TokenValue{ .CharLiteral = '\x08' };
@@ -1137,7 +1137,7 @@ fn character(l: *Lexer) !TokenValue {
         try l.forward(1);
         return TokenValue{ .CharLiteral = 'b' };
     } else if (std.mem.eql(u8, nexttwo, "de")) {
-        var delete = l.peek(6);
+        const delete = l.peek(6);
         if (std.mem.eql(u8, delete, "delete")) {
             try l.forward(6);
             return TokenValue{ .CharLiteral = '\x7F' };
@@ -1145,7 +1145,7 @@ fn character(l: *Lexer) !TokenValue {
         try l.forward(1);
         return TokenValue{ .CharLiteral = 'd' };
     } else if (std.mem.eql(u8, nexttwo, "es")) {
-        var escape = l.peek(6);
+        const escape = l.peek(6);
         if (std.mem.eql(u8, escape, "escape")) {
             try l.forward(6);
             return TokenValue{ .CharLiteral = '\x1b' };
@@ -1153,7 +1153,7 @@ fn character(l: *Lexer) !TokenValue {
         try l.forward(1);
         return TokenValue{ .CharLiteral = 'e' };
     } else if (std.mem.eql(u8, nexttwo, "ne")) {
-        var newline = l.peek(7);
+        const newline = l.peek(7);
         if (std.mem.eql(u8, newline, "newline")) {
             try l.forward(7);
             return TokenValue{ .CharLiteral = '\n' };
@@ -1161,7 +1161,7 @@ fn character(l: *Lexer) !TokenValue {
         try l.forward(1);
         return TokenValue{ .CharLiteral = 'n' };
     } else if (std.mem.eql(u8, nexttwo, "nu")) {
-        var null_ = l.peek(4);
+        const null_ = l.peek(4);
         if (std.mem.eql(u8, null_, "null")) {
             try l.forward(4);
             return TokenValue{ .CharLiteral = 0 };
@@ -1169,7 +1169,7 @@ fn character(l: *Lexer) !TokenValue {
         try l.forward(1);
         return TokenValue{ .CharLiteral = 'n' };
     } else if (std.mem.eql(u8, nexttwo, "re")) {
-        var return_ = l.peek(6);
+        const return_ = l.peek(6);
         if (std.mem.eql(u8, return_, "return")) {
             try l.forward(6);
             return TokenValue{ .CharLiteral = '\r' };
@@ -1177,7 +1177,7 @@ fn character(l: *Lexer) !TokenValue {
         try l.forward(1);
         return TokenValue{ .CharLiteral = 'r' };
     } else if (std.mem.eql(u8, nexttwo, "sp")) {
-        var space = l.peek(5);
+        const space = l.peek(5);
         if (std.mem.eql(u8, space, "space")) {
             try l.forward(5);
             return TokenValue{ .CharLiteral = ' ' };
@@ -1185,7 +1185,7 @@ fn character(l: *Lexer) !TokenValue {
         try l.forward(1);
         return TokenValue{ .CharLiteral = 's' };
     } else if (std.mem.eql(u8, nexttwo, "ta")) {
-        var tab = l.peek(3);
+        const tab = l.peek(3);
         if (std.mem.eql(u8, tab, "tab")) {
             try l.forward(3);
             return TokenValue{ .CharLiteral = '\t' };
@@ -1196,7 +1196,7 @@ fn character(l: *Lexer) !TokenValue {
         if (nexttwo[0] == 'x') {
             var hexescape = l.peek(3);
             try l.forward(3);
-            var ch: u8 = try std.fmt.parseInt(u8, hexescape[1..3], 16);
+            const ch: u8 = try std.fmt.parseInt(u8, hexescape[1..3], 16);
             return TokenValue{ .CharLiteral = ch };
         }
         try l.forward(1);
@@ -1260,7 +1260,7 @@ fn string(l: *Lexer) !TokenValue {
     var str: []u8 = try l.allocator.alloc(u8, 16);
     var count: usize = 0;
     while (true) {
-        var ch: u8 = try string_element(l);
+        const ch: u8 = try string_element(l);
         if (ch == 0) {
             break;
         }
@@ -1353,7 +1353,7 @@ fn string_element(l: *Lexer) !u8 {
         },
         'x' => {
             try l.forward(1);
-            var he: []const u8 = l.peek(2);
+            const he: []const u8 = l.peek(2);
             if (he.len != 2) {
                 return LexError.ExpectedHexValue;
             }
@@ -1429,7 +1429,7 @@ fn number(l: *Lexer) !TokenValue {
     // TODO: Reinterpret literals based on exactness prefix
     const bases = [4]i8{ 2, 8, 16, 10 }; // 10 should be last here
     inline for (bases) |n| {
-        var pre: usize = try prefix(n, l);
+        const pre: usize = try prefix(n, l);
         if (pre != 0) return complex(n, l);
     }
     return complex(10, l);
@@ -1453,7 +1453,7 @@ test "lex number" {
 }
 
 fn complex(comptime n: i8, l: *Lexer) !TokenValue {
-    var imag_only = l.peek(3);
+    const imag_only = l.peek(3);
     if (imag_only.len >= 2) {
         if ((imag_only[0] == '+' or imag_only[0] == '-') and imag_only[1] == 'i' and (imag_only.len == 2 or (imag_only.len == 3 and imag_only[2] != 'n'))) {
             try l.forward(2);
@@ -1467,22 +1467,22 @@ fn complex(comptime n: i8, l: *Lexer) !TokenValue {
             } };
         }
     }
-    var tok_real: TokenValue = try realN(n, l);
-    var next_c: []const u8 = l.peek(1);
+    const tok_real: TokenValue = try realN(n, l);
+    const next_c: []const u8 = l.peek(1);
     if (next_c.len != 1) {
         return tok_real;
     }
     switch (next_c[0]) {
         '@' => {
             try l.forward(1);
-            var tok_exp: TokenValue = try realN(n, l);
-            var coeff: f64 = switch (tok_real) {
+            const tok_exp: TokenValue = try realN(n, l);
+            const coeff: f64 = switch (tok_real) {
                 TokenTag.IntegerLiteral => |val| @as(f64, @floatFromInt(val)),
                 TokenTag.RationalLiteral => |vals| @as(f64, @floatFromInt(vals[0])) / @as(f64, @floatFromInt(vals[1])),
                 TokenTag.RealLiteral => |val| val,
                 else => unreachable,
             };
-            var angle: f64 = switch (tok_exp) {
+            const angle: f64 = switch (tok_exp) {
                 TokenTag.IntegerLiteral => |val| @as(f64, @floatFromInt(val)),
                 TokenTag.RationalLiteral => |vals| @as(f64, @floatFromInt(vals[0])) / @as(f64, @floatFromInt(vals[1])),
                 TokenTag.RealLiteral => |val| val,
@@ -1498,20 +1498,20 @@ fn complex(comptime n: i8, l: *Lexer) !TokenValue {
             if (i_.len < 2) {
                 return LexError.ExpectedI;
             }
-            var tok_imag: TokenValue = if (i_[1] != 'i') try realN(n, l) else TokenValue{ .RealLiteral = if (i_[0] == '+') 1 else -1 };
+            const tok_imag: TokenValue = if (i_[1] != 'i') try realN(n, l) else TokenValue{ .RealLiteral = if (i_[0] == '+') 1 else -1 };
             if (i_[1] == 'i') try l.forward(1);
             i_ = l.peek(1);
             if (i_.len != 1 or i_[0] != 'i') {
                 return LexError.ExpectedI;
             }
             try l.forward(1);
-            var real: f64 = switch (tok_real) {
+            const real: f64 = switch (tok_real) {
                 TokenTag.IntegerLiteral => |val| @as(f64, @floatFromInt(val)),
                 TokenTag.RationalLiteral => |vals| @as(f64, @floatFromInt(vals[0])) / @as(f64, @floatFromInt(vals[1])),
                 TokenTag.RealLiteral => |val| val,
                 else => unreachable,
             };
-            var imag: f64 = switch (tok_imag) {
+            const imag: f64 = switch (tok_imag) {
                 TokenTag.IntegerLiteral => |val| @as(f64, @floatFromInt(val)),
                 TokenTag.RationalLiteral => |vals| @as(f64, @floatFromInt(vals[0])) / @as(f64, @floatFromInt(vals[1])),
                 TokenTag.RealLiteral => |val| val,
@@ -1523,7 +1523,7 @@ fn complex(comptime n: i8, l: *Lexer) !TokenValue {
         },
         'i' => {
             try l.forward(1);
-            var imag: f64 = switch (tok_real) {
+            const imag: f64 = switch (tok_real) {
                 TokenTag.IntegerLiteral => |val| @as(f64, @floatFromInt(val)),
                 TokenTag.RationalLiteral => |vals| @as(f64, @floatFromInt(vals[0])) / @as(f64, @floatFromInt(vals[1])),
                 TokenTag.RealLiteral => |val| val,
@@ -1602,11 +1602,11 @@ test "lex complex" {
 }
 
 fn realN(comptime n: i8, l: *Lexer) !TokenValue {
-    var infnan_: usize = try infnan(l);
+    const infnan_: usize = try infnan(l);
     if (infnan_ != 0) {
-        var infnan_str = try l.contents_back(infnan_);
-        var minus: bool = infnan_str[0] == '-';
-        var inf: bool = infnan_str[1] == 'i';
+        const infnan_str = try l.contents_back(infnan_);
+        const minus: bool = infnan_str[0] == '-';
+        const inf: bool = infnan_str[1] == 'i';
         var val: f64 = 0;
         if (inf) {
             val = std.math.inf(f64);
@@ -1618,11 +1618,11 @@ fn realN(comptime n: i8, l: *Lexer) !TokenValue {
         }
         return TokenValue{ .RealLiteral = val };
     }
-    var sign_: []const u8 = l.peek(1);
+    const sign_: []const u8 = l.peek(1);
     if (sign_.len == 0) {
         return LexError.ExpectedCharacter;
     }
-    var minus: bool = sign_[0] == '-';
+    const minus: bool = sign_[0] == '-';
     if (sign(sign_[0])) {
         try l.forward(1);
     }
@@ -1681,8 +1681,8 @@ test "lex real" {
 }
 
 fn ureal(comptime n: i8, l: *Lexer) !TokenValue {
-    var int_part: usize = try uinteger(n, l);
-    var slashdec: []const u8 = l.peek(1);
+    const int_part: usize = try uinteger(n, l);
+    const slashdec: []const u8 = l.peek(1);
     var den_count: usize = 0;
     var slash: bool = false;
     if (slashdec.len == 1 and slashdec[0] == '/') {
@@ -1866,7 +1866,7 @@ test "lex uinteger" {
 }
 
 fn prefix(comptime n: i8, l: *Lexer) !usize {
-    var first2: []const u8 = l.peek(2);
+    const first2: []const u8 = l.peek(2);
     if (first2.len != 2) {
         return 0;
     }
@@ -1883,7 +1883,7 @@ fn prefix(comptime n: i8, l: *Lexer) !usize {
         return 0;
     } else if (radix(n, first2)) {
         try l.forward(2);
-        var next2: []const u8 = l.peek(2);
+        const next2: []const u8 = l.peek(2);
         if (next2.len == 2 and exactness(next2)) {
             try l.forward(2);
             return 4;
@@ -1972,11 +1972,11 @@ test "lex infnan" {
 
 fn suffix(l: *Lexer) !usize {
     var count: usize = 0;
-    var first: []const u8 = l.peek(1);
+    const first: []const u8 = l.peek(1);
     if (first.len == 1 and exponentMarker(first[0])) {
         try l.forward(1);
         count += 1;
-        var suff_sign: []const u8 = l.peek(1);
+        const suff_sign: []const u8 = l.peek(1);
         if (suff_sign.len == 1 and sign(suff_sign[0])) {
             try l.forward(1);
             count += 1;

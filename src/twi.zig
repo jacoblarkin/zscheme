@@ -228,9 +228,133 @@ pub const LispVal = union(LispValTag) {
     }
 
     fn divideComplex(val: LispVal, other: [2]f64) LispVal {
-        var otherMag2 = other[0] * other[0] + other[1] * other[1];
-        var otherConj = [2]f64{ other[0], -other[1] };
+        const otherMag2 = other[0] * other[0] + other[1] * other[1];
+        const otherConj = [2]f64{ other[0], -other[1] };
         return val.timesComplex(otherConj).divideReal(otherMag2);
+    }
+
+    fn lessThanInteger(val: LispVal, other: i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Bool = v < other },
+            LispValTag.Rational => |v| return LispVal{ .Bool = v[0] < other * v[1] },
+            LispValTag.Real => |v| return LispVal{ .Bool = v < @as(f64, @floatFromInt(other)) },
+            else => {
+                std.debug.print("Runtime Error: Can only compare Integers, Rationals, or Reals.\n", .{});
+                return LispVal{ .Nil = {} };
+            },
+        }
+    }
+
+    fn lessThanRational(val: LispVal, other: [2]i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Bool = other[1] * v < other[0] },
+            LispValTag.Rational => |v| return LispVal{ .Bool = other[1] * v[0] < other[0] * v[1] },
+            LispValTag.Real => |v| return LispVal{ .Bool = v * @as(f64, @floatFromInt(other[1])) < @as(f64, @floatFromInt(other[0])) },
+            else => {
+                std.debug.print("Runtime Error: Can only compare Integers, Rationals, or Reals.\n", .{});
+                return LispVal{ .Nil = {} };
+            },
+        }
+    }
+
+    fn lessThanReal(val: LispVal, other: f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Bool = @as(f64, @floatFromInt(v)) < other },
+            LispValTag.Rational => |v| return LispVal{ .Bool = @as(f64, @floatFromInt(v[0])) < other * @as(f64, @floatFromInt(v[1])) },
+            LispValTag.Real => |v| return LispVal{ .Bool = v < other },
+            else => {
+                std.debug.print("Runtime Error: Can only compare Integers, Rationals, or Reals.\n", .{});
+                return LispVal{ .Nil = {} };
+            },
+        }
+    }
+
+    fn greaterThanInteger(val: LispVal, other: i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Bool = v > other },
+            LispValTag.Rational => |v| return LispVal{ .Bool = v[0] > other * v[1] },
+            LispValTag.Real => |v| return LispVal{ .Bool = v > @as(f64, @floatFromInt(other)) },
+            else => {
+                std.debug.print("Runtime Error: Can only compare Integers, Rationals, or Reals.\n", .{});
+                return LispVal{ .Nil = {} };
+            },
+        }
+    }
+
+    fn greaterThanRational(val: LispVal, other: [2]i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Bool = other[1] * v > other[0] },
+            LispValTag.Rational => |v| return LispVal{ .Bool = other[1] * v[0] > other[0] * v[1] },
+            LispValTag.Real => |v| return LispVal{ .Bool = v * @as(f64, @floatFromInt(other[1])) > @as(f64, @floatFromInt(other[0])) },
+            else => {
+                std.debug.print("Runtime Error: Can only compare Integers, Rationals, or Reals.\n", .{});
+                return LispVal{ .Nil = {} };
+            },
+        }
+    }
+
+    fn greaterThanReal(val: LispVal, other: f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Bool = @as(f64, @floatFromInt(v)) > other },
+            LispValTag.Rational => |v| return LispVal{ .Bool = @as(f64, @floatFromInt(v[0])) > other * @as(f64, @floatFromInt(v[1])) },
+            LispValTag.Real => |v| return LispVal{ .Bool = v > other },
+            else => {
+                std.debug.print("Runtime Error: Can only compare Integers, Rationals, or Reals.\n", .{});
+                return LispVal{ .Nil = {} };
+            },
+        }
+    }
+
+    fn equalToInteger(val: LispVal, other: i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Bool = v == other },
+            LispValTag.Rational => |v| return LispVal{ .Bool = v[0] == other * v[1] },
+            LispValTag.Real => |v| return LispVal{ .Bool = v == @as(f64, @floatFromInt(other)) },
+            LispValTag.Complex => |v| return LispVal{ .Bool = v[1] == 0.0 and v[0] == @as(f64, @floatFromInt(other)) },
+            else => {
+                std.debug.print("Runtime Error: Can only compare numbers.\n", .{});
+                return LispVal{ .Nil = {} };
+            },
+        }
+    }
+
+    fn equalToRational(val: LispVal, other: [2]i64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Bool = other[1] * v == other[0] },
+            LispValTag.Rational => |v| return LispVal{ .Bool = other[1] * v[0] == other[0] * v[1] },
+            LispValTag.Real => |v| return LispVal{ .Bool = v * @as(f64, @floatFromInt(other[1])) == @as(f64, @floatFromInt(other[0])) },
+            LispValTag.Complex => |v| return LispVal{ .Bool = v[1] == 0.0 and v[0] * @as(f64, @floatFromInt(other[1])) == @as(f64, @floatFromInt(other[0])) },
+            else => {
+                std.debug.print("Runtime Error: Can only compare numbers.\n", .{});
+                return LispVal{ .Nil = {} };
+            },
+        }
+    }
+
+    fn equalToReal(val: LispVal, other: f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Bool = @as(f64, @floatFromInt(v)) == other },
+            LispValTag.Rational => |v| return LispVal{ .Bool = @as(f64, @floatFromInt(v[0])) == other * @as(f64, @floatFromInt(v[1])) },
+            LispValTag.Real => |v| return LispVal{ .Bool = v == other },
+            LispValTag.Complex => |v| return LispVal{ .Bool = v[1] == 0.0 and v[0] == other },
+            else => {
+                std.debug.print("Runtime Error: Can only compare numbers.\n", .{});
+                return LispVal{ .Nil = {} };
+            },
+        }
+    }
+
+    fn equalToComplex(val: LispVal, other: [2]f64) LispVal {
+        switch (val) {
+            LispValTag.Integer => |v| return LispVal{ .Bool = @as(f64, @floatFromInt(v)) == other[0] and other[1] == 0.0 },
+            LispValTag.Rational => |v| return LispVal{ .Bool = (@as(f64, @floatFromInt(v[0])) == other[0] * @as(f64, @floatFromInt(v[1])) and other[1] == 0.0) },
+            LispValTag.Real => |v| return LispVal{ .Bool = (v == other[0] and other[1] == 0.0) },
+            LispValTag.Complex => |v| return LispVal{ .Bool = (v[1] == other[1] and v[0] == other[0]) },
+            else => {
+                std.debug.print("Runtime Error: Can only compare numbers.\n", .{});
+                return LispVal{ .Nil = {} };
+            },
+        }
     }
 
     pub fn print(val: LispVal) void {
@@ -315,7 +439,7 @@ fn plus(args: ConsStruct) LispVal {
 
 fn minus(args: ConsStruct) LispVal {
     var diff = args.Car.*;
-    var cdr = args.Cdr.*;
+    const cdr = args.Cdr.*;
     if (cdr == LispValTag.Nil) {
         return diff.timesInteger(-1);
     } else if (cdr != LispValTag.Cons) {
@@ -363,7 +487,7 @@ fn times(args: ConsStruct) LispVal {
 
 fn divide(args: ConsStruct) LispVal {
     var quot = args.Car.*;
-    var cdr = args.Cdr.*;
+    const cdr = args.Cdr.*;
     if (cdr == LispValTag.Nil) {
         var unit = LispVal{ .Integer = 1 };
         return switch (quot) {
@@ -395,6 +519,107 @@ fn divide(args: ConsStruct) LispVal {
     return quot;
 }
 
+fn lessThan(args: ConsStruct) LispVal {
+    var first = args.Car.*;
+    const cdr = args.Cdr.*;
+    if (cdr != LispValTag.Cons) {
+        std.debug.print("Runtime Error: Expected at lest two arguments.\n", .{});
+        return LispVal{ .Nil = {} };
+    }
+    var argsC = args.Cdr.Cons;
+    var arg = argsC.Car;
+    while (arg.* != LispValTag.Nil) {
+        const lt = switch (arg.*) {
+            LispValTag.Integer => |v| first.lessThanInteger(v),
+            LispValTag.Rational => |v| first.lessThanRational(v),
+            LispValTag.Real => |v| first.lessThanReal(v),
+            else => break,
+        };
+        if (lt != LispValTag.Bool or !lt.Bool) {
+            return lt;
+        }
+        first = arg.*;
+        switch (argsC.Cdr.*) {
+            LispValTag.Cons => |c| argsC = c,
+            else => break,
+        }
+        arg = argsC.Car;
+    }
+    return LispVal{ .Bool = true };
+}
+
+fn greaterThan(args: ConsStruct) LispVal {
+    var first = args.Car.*;
+    const cdr = args.Cdr.*;
+    if (cdr != LispValTag.Cons) {
+        std.debug.print("Runtime Error: Expected at lest two arguments.\n", .{});
+        return LispVal{ .Nil = {} };
+    }
+    var argsC = args.Cdr.Cons;
+    var arg = argsC.Car;
+    while (arg.* != LispValTag.Nil) {
+        const lt = switch (arg.*) {
+            LispValTag.Integer => |v| first.greaterThanInteger(v),
+            LispValTag.Rational => |v| first.greaterThanRational(v),
+            LispValTag.Real => |v| first.greaterThanReal(v),
+            else => break,
+        };
+        if (lt != LispValTag.Bool or !lt.Bool) {
+            return lt;
+        }
+        first = arg.*;
+        switch (argsC.Cdr.*) {
+            LispValTag.Cons => |c| argsC = c,
+            else => break,
+        }
+        arg = argsC.Car;
+    }
+    return LispVal{ .Bool = true };
+}
+fn equalTo(args: ConsStruct) LispVal {
+    var first = args.Car.*;
+    const cdr = args.Cdr.*;
+    if (cdr != LispValTag.Cons) {
+        std.debug.print("Runtime Error: Expected at lest two arguments.\n", .{});
+        return LispVal{ .Nil = {} };
+    }
+    var argsC = args.Cdr.Cons;
+    var arg = argsC.Car;
+    while (arg.* != LispValTag.Nil) {
+        const lt = switch (arg.*) {
+            LispValTag.Integer => |v| first.equalToInteger(v),
+            LispValTag.Rational => |v| first.equalToRational(v),
+            LispValTag.Real => |v| first.equalToReal(v),
+            LispValTag.Complex => |v| first.equalToComplex(v),
+            else => break,
+        };
+        if (lt != LispValTag.Bool or !lt.Bool) {
+            return lt;
+        }
+        first = arg.*;
+        switch (argsC.Cdr.*) {
+            LispValTag.Cons => |c| argsC = c,
+            else => break,
+        }
+        arg = argsC.Car;
+    }
+    return LispVal{ .Bool = true };
+}
+
+fn ifScheme(args: ConsStruct) LispVal {
+    const then = switch (args.Car.*) {
+        LispValTag.Bool => |b| b,
+        else => {
+            std.debug.print("Runtime Error: Expected boolean.\n", .{});
+            return LispVal{ .Nil = {} };
+        },
+    };
+    if (then) {
+        return args.Cdr.Cons.Car.*;
+    }
+    return args.Cdr.Cons.Cdr.Cons.Car.*;
+}
+
 pub const Interpreter = struct {
     allocator: std.mem.Allocator,
     values: std.StringHashMap(LispVal),
@@ -405,6 +630,10 @@ pub const Interpreter = struct {
         try values.put("-", LispVal{ .Func = LispFunc{ .name = "-", .arity = null, .func = minus } });
         try values.put("*", LispVal{ .Func = LispFunc{ .name = "*", .arity = null, .func = times } });
         try values.put("/", LispVal{ .Func = LispFunc{ .name = "/", .arity = null, .func = divide } });
+        try values.put("<", LispVal{ .Func = LispFunc{ .name = "<", .arity = null, .func = lessThan } });
+        try values.put(">", LispVal{ .Func = LispFunc{ .name = ">", .arity = null, .func = greaterThan } });
+        try values.put("=", LispVal{ .Func = LispFunc{ .name = "=", .arity = null, .func = equalTo } });
+        try values.put("if", LispVal{ .Func = LispFunc{ .name = "if", .arity = 3, .func = ifScheme } });
         return Interpreter{
             .allocator = allocator,
             .values = values,
@@ -463,11 +692,11 @@ fn interpretVector(interpreter: *Interpreter, v: std.ArrayList(*parser.Expressio
 
 fn interpretQuoted(interpreter: *Interpreter, expr: *const parser.Expression, quasi: bool) LispVal {
     if (expr.* == parser.ExpressionTag.Cons and !quasi) {
-        var car = interpreter.allocator.create(LispVal) catch {
+        const car = interpreter.allocator.create(LispVal) catch {
             std.debug.print("Runtime Error: Memory allocation failed.", .{});
             return LispVal{ .Nil = {} };
         };
-        var cdr = interpreter.allocator.create(LispVal) catch {
+        const cdr = interpreter.allocator.create(LispVal) catch {
             std.debug.print("Runtime Error: Memory allocation failed.", .{});
             return LispVal{ .Nil = {} };
         };
@@ -479,14 +708,14 @@ fn interpretQuoted(interpreter: *Interpreter, expr: *const parser.Expression, qu
 }
 
 fn interpretCons(interpreter: *Interpreter, expr: *const parser.Expression) LispVal {
-    var car = interpreter.interpret(expr.Cons.Car);
+    const car = interpreter.interpret(expr.Cons.Car);
     return apply(interpreter, car, expr.Cons.Cdr);
 }
 
 fn apply(interpreter: *Interpreter, funcVal: LispVal, args: *const parser.Expression) LispVal {
     var func = funcVal.Func;
     var arguments = args;
-    var empty: ConsStruct = ConsStruct{
+    const empty: ConsStruct = ConsStruct{
         .Car = &NilVal,
         .Cdr = &NilVal,
     };

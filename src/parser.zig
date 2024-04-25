@@ -76,7 +76,7 @@ pub const Parser = struct {
     peekedToken: ?lex.Token = null,
 
     pub fn init(allocator: std.mem.Allocator, filename: []const u8) !Parser {
-        var lexer = if (filename.len > 0)
+        const lexer = if (filename.len > 0)
             try lex.Lexer.init(allocator, filename)
         else
             lex.Lexer.initRepl(allocator);
@@ -91,8 +91,8 @@ pub const Parser = struct {
         if (parser.peekedToken) |tok| {
             return tok;
         }
-        var tok: lex.Token = while (true) {
-            var ret = parser.lexer.getNextToken() catch |err| {
+        const tok: lex.Token = while (true) {
+            const ret = parser.lexer.getNextToken() catch |err| {
                 parser.hadError = true;
                 std.debug.print("{s}\n", .{lex.Lexer.errorMsg(err)});
                 continue;
@@ -110,7 +110,7 @@ pub const Parser = struct {
             return tok;
         }
         while (true) {
-            var ret = parser.lexer.getNextToken() catch |err| {
+            const ret = parser.lexer.getNextToken() catch |err| {
                 parser.hadError = true;
                 std.debug.print("{s}\n", .{lex.Lexer.errorMsg(err)});
                 continue;
@@ -141,7 +141,7 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
         parser.hadError = true;
         return null;
     };
-    var tok: lex.Token = parser.next();
+    const tok: lex.Token = parser.next();
     switch (tok.value) {
         lex.TokenTag.BoolLiteral => |b| expr.* = Expression{ .BoolLiteral = b },
         lex.TokenTag.CharLiteral => |c| expr.* = Expression{ .CharLiteral = c },
@@ -183,7 +183,7 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
                     return null;
                 }
             } else {
-                var car: *Expression = parseExpr(parser, quoted) orelse {
+                const car: *Expression = parseExpr(parser, quoted) orelse {
                     parser.allocator.destroy(expr);
                     return null;
                 };
@@ -196,7 +196,7 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
         lex.TokenTag.VecBegin => {
             var vec: std.ArrayList(*Expression) = std.ArrayList(*Expression).init(parser.allocator);
             while (parser.peek().value != lex.TokenTag.RParen) {
-                var val: *Expression = parseExpr(parser, quoted) orelse {
+                const val: *Expression = parseExpr(parser, quoted) orelse {
                     vec.deinit();
                     parser.allocator.destroy(expr);
                     return null;
@@ -215,7 +215,7 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
         lex.TokenTag.ByteVectorBegin => {
             var bv: std.ArrayList(u8) = std.ArrayList(u8).init(parser.allocator);
             while (parser.peek().value != lex.TokenTag.RParen) {
-                var val: *Expression = parseExpr(parser, quoted) orelse {
+                const val: *Expression = parseExpr(parser, quoted) orelse {
                     bv.deinit();
                     parser.allocator.destroy(expr);
                     return null;
@@ -276,19 +276,19 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
 }
 
 fn parseList(parser: *Parser, car: *Expression, quoted: QuoteTag) std.mem.Allocator.Error!*Expression {
-    var cc = try parser.allocator.create(Expression);
+    const cc = try parser.allocator.create(Expression);
     errdefer parser.allocator.destroy(cc);
     if (parser.peek().value == lex.TokenTag.RParen) {
         _ = parser.next();
-        var nilExpr: *Expression = try parser.allocator.create(Expression);
+        const nilExpr: *Expression = try parser.allocator.create(Expression);
         nilExpr.* = Expression{ .Nil = {} };
         cc.* = Expression{ .Cons = ConsCell{ .Car = car, .Cdr = nilExpr } };
         return cc;
     }
     if (parser.peek().value == lex.TokenTag.Cons) {
         // TODO: What to do with '.'?
-        var cons = parser.next();
-        var cdr = parseExpr(parser, quoted) orelse {
+        const cons = parser.next();
+        const cdr = parseExpr(parser, quoted) orelse {
             parser.allocator.destroy(cc);
             parser.printError("Expected cdr after cons.", cons);
             return car;
@@ -306,7 +306,7 @@ fn parseList(parser: *Parser, car: *Expression, quoted: QuoteTag) std.mem.Alloca
         cc.* = Expression{ .Cons = ConsCell{ .Car = car, .Cdr = cdr } };
         return cc;
     }
-    var cdr = parseExpr(parser, quoted) orelse {
+    const cdr = parseExpr(parser, quoted) orelse {
         parser.allocator.destroy(cc);
         return car;
     };

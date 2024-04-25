@@ -30,7 +30,7 @@ pub fn main() anyerror!void {
     var buf: [4096]u8 = undefined;
     while (true) {
         try stdout.print("> ", .{});
-        var bytes = try stdin.read(&buf);
+        const bytes = try stdin.read(&buf);
         if (bytes == 0) break;
         var expr = parser.parseRepl(buf[0..bytes]) orelse {
             std.log.info("Error!", .{});
