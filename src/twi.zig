@@ -609,15 +609,109 @@ fn equalTo(args: ConsStruct) LispVal {
 fn ifScheme(args: ConsStruct) LispVal {
     const then = switch (args.Car.*) {
         LispValTag.Bool => |b| b,
-        else => {
-            std.debug.print("Runtime Error: Expected boolean.\n", .{});
-            return LispVal{ .Nil = {} };
-        },
+        else => true,
     };
     if (then) {
         return args.Cdr.Cons.Car.*;
     }
     return args.Cdr.Cons.Cdr.Cons.Car.*;
+}
+
+fn orScheme(args: ConsStruct) LispVal {
+    return switch (args.Car.*) {
+        LispValTag.Nil => LispVal{ .Bool = false },
+        LispValTag.Bool => |b| {
+            if (b) return args.Car.*;
+            return switch (args.Cdr.*) {
+                LispValTag.Nil => args.Car.*,
+                LispValTag.Cons => |c| orScheme(c),
+                else => args.Cdr.*,
+            };
+        },
+        else => args.Car.*,
+    };
+}
+
+fn lessThanOrEqual(args: ConsStruct) LispVal {
+    var first = args.Car.*;
+    const cdr = args.Cdr.*;
+    if (cdr != LispValTag.Cons) {
+        std.debug.print("Runtime Error: Expected at lest two arguments.\n", .{});
+        return LispVal{ .Nil = {} };
+    }
+    var argsC = args.Cdr.Cons;
+    var arg = argsC.Car;
+    while (arg.* != LispValTag.Nil) {
+        const lt = switch (arg.*) {
+            LispValTag.Integer => |v| first.lessThanInteger(v),
+            LispValTag.Rational => |v| first.lessThanRational(v),
+            LispValTag.Real => |v| first.lessThanReal(v),
+            else => break,
+        };
+        if (lt != LispValTag.Bool) {
+            return lt;
+        }
+        if (!lt.Bool) {
+            const eq = switch (arg.*) {
+                LispValTag.Integer => |v| first.equalToInteger(v),
+                LispValTag.Rational => |v| first.equalToRational(v),
+                LispValTag.Real => |v| first.equalToReal(v),
+                LispValTag.Complex => |v| first.equalToComplex(v),
+                else => break,
+            };
+            if (eq != LispValTag.Bool or !eq.Bool) {
+                return eq;
+            }
+        }
+        first = arg.*;
+        switch (argsC.Cdr.*) {
+            LispValTag.Cons => |c| argsC = c,
+            else => break,
+        }
+        arg = argsC.Car;
+    }
+    return LispVal{ .Bool = true };
+}
+
+fn greaterThanOrEqual(args: ConsStruct) LispVal {
+    var first = args.Car.*;
+    const cdr = args.Cdr.*;
+    if (cdr != LispValTag.Cons) {
+        std.debug.print("Runtime Error: Expected at lest two arguments.\n", .{});
+        return LispVal{ .Nil = {} };
+    }
+    var argsC = args.Cdr.Cons;
+    var arg = argsC.Car;
+    while (arg.* != LispValTag.Nil) {
+        const lt = switch (arg.*) {
+            LispValTag.Integer => |v| first.greaterThanInteger(v),
+            LispValTag.Rational => |v| first.greaterThanRational(v),
+            LispValTag.Real => |v| first.greaterThanReal(v),
+            else => break,
+        };
+        if (lt != LispValTag.Bool) {
+            return lt;
+        }
+        if (!lt.Bool) {
+            const eq = switch (arg.*) {
+                LispValTag.Integer => |v| first.equalToInteger(v),
+                LispValTag.Rational => |v| first.equalToRational(v),
+                LispValTag.Real => |v| first.equalToReal(v),
+                LispValTag.Complex => |v| first.equalToComplex(v),
+                else => break,
+            };
+            if (eq != LispValTag.Bool or !eq.Bool) {
+                return eq;
+            }
+        }
+        first = arg.*;
+        switch (argsC.Cdr.*) {
+            LispValTag.Cons => |c| argsC = c,
+            else => break,
+        }
+        arg = argsC.Car;
+    }
+    return LispVal{ .Bool = true };
 }
 
 pub const Interpreter = struct {
@@ -632,8 +726,11 @@ pub const Interpreter = struct {
         try values.put("/", LispVal{ .Func = LispFunc{ .name = "/", .arity = null, .func = divide } });
         try values.put("<", LispVal{ .Func = LispFunc{ .name = "<", .arity = null, .func = lessThan } });
         try values.put(">", LispVal{ .Func = LispFunc{ .name = ">", .arity = null, .func = greaterThan } });
+        try values.put("<=", LispVal{ .Func = LispFunc{ .name = "<=", .arity = null, .func = lessThanOrEqual } });
+        try values.put(">=", LispVal{ .Func = LispFunc{ .name = ">=", .arity = null, .func = greaterThanOrEqual } });
         try values.put("=", LispVal{ .Func = LispFunc{ .name = "=", .arity = null, .func = equalTo } });
         try values.put("if", LispVal{ .Func = LispFunc{ .name = "if", .arity = 3, .func = ifScheme } });
+        try values.put("or", LispVal{ .Func = LispFunc{ .name = "or", .arity = null, .func = orScheme } });
         return Interpreter{
             .allocator = allocator,
             .values = values,
