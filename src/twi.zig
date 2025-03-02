@@ -32,6 +32,325 @@ pub const LispVal = union(LispValTag) {
     ByteVector: std.ArrayList(u8),
     Func: LispFunc,
 
+    fn isnil(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Nil => true,
+            else => false,
+        };
+    }
+
+    fn isbool(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Bool => true,
+            else => false,
+        };
+    }
+
+    fn ischar(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Char => true,
+            else => false,
+        };
+    }
+
+    fn isinteger(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Integer => true,
+            else => false,
+        };
+    }
+
+    fn isrational(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Rational => true,
+            else => false,
+        };
+    }
+
+    fn isreal(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Real => true,
+            else => false,
+        };
+    }
+
+    fn iscomplex(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Complex => true,
+            else => false,
+        };
+    }
+
+    fn isnumber(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Integer, LispValTag.Rational, LispValTag.Real, LispValTag.Complex => true,
+            else => false,
+        };
+    }
+
+    fn issymbol(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Symbol => true,
+            else => false,
+        };
+    }
+
+    fn isstring(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.String => true,
+            else => false,
+        };
+    }
+
+    fn iscons(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Cons => true,
+            else => false,
+        };
+    }
+
+    fn isvector(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Vector => true,
+            else => false,
+        };
+    }
+
+    fn isbytevector(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.ByteVector => true,
+            else => false,
+        };
+    }
+
+    fn isfunction(val: LispVal) bool {
+        return switch (val) {
+            LispValTag.Func => true,
+            else => false,
+        };
+    }
+
+    fn booleq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Bool => |b1| switch (other) {
+                LispValTag.Bool => |b2| b1 == b2,
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn chareq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Char => |c1| switch (other) {
+                LispValTag.Char => |c2| c1 == c2,
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn integereq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Integer => |in1| switch (other) {
+                LispValTag.Integer => |in2| in1 == in2,
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn rationaleq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Rational => |in1| switch (other) {
+                LispValTag.Rational => |in2| in1[0] == in2[0] and in1[1] == in2[1],
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn realeq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Real => |in1| switch (other) {
+                LispValTag.Real => |in2| in1 == in2,
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn complexeq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Complex => |in1| switch (other) {
+                LispValTag.Complex => |in2| in1[0] == in2[0] and in1[1] == in2[1],
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn inexacteq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Complex => |in1| switch (other) {
+                LispValTag.Real => |in2| in1[0] == in2 and in1[1] == 0,
+                LispValTag.Complex => |in2| in1[0] == in2[0] and in1[1] == in2[1],
+                else => false,
+            },
+            LispValTag.Real => |in1| switch (other) {
+                LispValTag.Real => |in2| in1 == in2,
+                LispValTag.Complex => |in2| in1 == in2[0] and in2[1] == 0,
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn exacteq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Rational => |in1| switch (other) {
+                LispValTag.Integer => |in2| in1[0] == in2 and in1[1] == 1,
+                LispValTag.Rational => |in2| in1[0] == in2[0] and in1[1] == in2[1],
+                else => false,
+            },
+            LispValTag.Integer => |in1| switch (other) {
+                LispValTag.Integer => |in2| in1 == in2,
+                LispValTag.Rational => |in2| in1 == in2[0] and in2[1] == 1,
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn stringeq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.String => |s1| switch (other) {
+                LispValTag.String => |s2| std.mem.eql(u8, s1, s2),
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn symboleq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Symbol => |s1| switch (other) {
+                LispValTag.Symbol => |s2| std.mem.eql(u8, s1, s2),
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn conseq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Cons => |cn1| switch (other) {
+                LispValTag.Cons => |cn2| cn1.Car == cn2.Car and cn1.Cdr == cn2.Cdr,
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn consequal(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Cons => |cn1| switch (other) {
+                LispValTag.Cons => |cn2| cn1.Car.equal(cn2.Car.*) and
+                    cn1.Cdr.equal(cn2.Cdr.*),
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn vectoreq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Vector => |v1| switch (other) {
+                LispValTag.Vector => |v2| &v1.items == &v2.items,
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn vectorequal(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Vector => |v1| switch (other) {
+                LispValTag.Vector => |v2| {
+                    if (v1.items.len != v2.items.len) return false;
+                    for (v1.items, v2.items) |e1, e2| {
+                        if (!e1.equal(e2)) return false;
+                    }
+                    return true;
+                },
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn bytevectoreq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.ByteVector => |v1| switch (other) {
+                LispValTag.ByteVector => |v2| &v1.items == &v2.items,
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn bytevectorequal(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.ByteVector => |v1| switch (other) {
+                LispValTag.ByteVector => |v2| std.mem.eql(u8, v1.items, v2.items),
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn funceq(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Func => |f1| switch (other) {
+                LispValTag.Func => |f2| f1.func == f2.func,
+                else => false,
+            },
+            else => false,
+        };
+    }
+
+    fn eqv(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Nil => true,
+            LispValTag.Bool => booleq(val, other),
+            LispValTag.Char => chareq(val, other),
+            LispValTag.Integer, LispValTag.Rational => exacteq(val, other),
+            LispValTag.Real, LispValTag.Complex => inexacteq(val, other),
+            LispValTag.String => stringeq(val, other),
+            LispValTag.Symbol => symboleq(val, other),
+            LispValTag.Cons => conseq(val, other),
+            LispValTag.Vector => vectoreq(val, other),
+            LispValTag.ByteVector => bytevectoreq(val, other),
+            LispValTag.Func => funceq(val, other),
+        };
+    }
+
+    fn equal(val: LispVal, other: LispVal) bool {
+        return switch (val) {
+            LispValTag.Nil => true,
+            LispValTag.Bool => booleq(val, other),
+            LispValTag.Char => chareq(val, other),
+            LispValTag.Integer, LispValTag.Rational => exacteq(val, other),
+            LispValTag.Real, LispValTag.Complex => inexacteq(val, other),
+            LispValTag.String => stringeq(val, other),
+            LispValTag.Symbol => symboleq(val, other),
+            LispValTag.Cons => consequal(val, other),
+            LispValTag.Vector => vectorequal(val, other),
+            LispValTag.ByteVector => bytevectorequal(val, other),
+            LispValTag.Func => funceq(val, other),
+        };
+    }
+
     fn plusInteger(val: LispVal, other: i64) LispVal {
         switch (val) {
             LispValTag.Integer => |v| return LispVal{ .Integer = v + other },
@@ -714,6 +1033,30 @@ fn greaterThanOrEqual(args: ConsStruct) LispVal {
     return LispVal{ .Bool = true };
 }
 
+fn schemeEqv(args: ConsStruct) LispVal {
+    var first = args.Car.*;
+    const cdr = args.Cdr.*;
+    if (cdr != LispValTag.Cons) {
+        std.debug.print("Runtime Error: Expected two arguments.\n", .{});
+        return LispVal{ .Nil = {} };
+    }
+    const argsC = args.Cdr.Cons;
+    const arg = argsC.Car;
+    return LispVal{ .Bool = first.eqv(arg.*) };
+}
+
+fn schemeEqual(args: ConsStruct) LispVal {
+    var first = args.Car.*;
+    const cdr = args.Cdr.*;
+    if (cdr != LispValTag.Cons) {
+        std.debug.print("Runtime Error: Expected two arguments.\n", .{});
+        return LispVal{ .Nil = {} };
+    }
+    const argsC = args.Cdr.Cons;
+    const arg = argsC.Car;
+    return LispVal{ .Bool = first.equal(arg.*) };
+}
+
 pub const Interpreter = struct {
     allocator: std.mem.Allocator,
     values: std.StringHashMap(LispVal),
@@ -729,6 +1072,9 @@ pub const Interpreter = struct {
         try values.put("<=", LispVal{ .Func = LispFunc{ .name = "<=", .arity = null, .func = lessThanOrEqual } });
         try values.put(">=", LispVal{ .Func = LispFunc{ .name = ">=", .arity = null, .func = greaterThanOrEqual } });
         try values.put("=", LispVal{ .Func = LispFunc{ .name = "=", .arity = null, .func = equalTo } });
+        try values.put("eqv?", LispVal{ .Func = LispFunc{ .name = "eqv?", .arity = 2, .func = schemeEqv } });
+        try values.put("eq?", LispVal{ .Func = LispFunc{ .name = "eq?", .arity = 2, .func = schemeEqv } });
+        try values.put("equal?", LispVal{ .Func = LispFunc{ .name = "equal?", .arity = 2, .func = schemeEqual } });
         try values.put("if", LispVal{ .Func = LispFunc{ .name = "if", .arity = 3, .func = ifScheme } });
         try values.put("or", LispVal{ .Func = LispFunc{ .name = "or", .arity = null, .func = orScheme } });
         return Interpreter{
