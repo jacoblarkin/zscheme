@@ -126,7 +126,7 @@ pub const Lexer = struct {
             .line = 1,
             .column = 1,
             .position = 0,
-            .strings = std.ArrayList([]const u8).init(allocator),
+            .strings = std.ArrayList([]const u8).empty,
         };
     }
 
@@ -140,7 +140,7 @@ pub const Lexer = struct {
             .line = 0,
             .column = 1,
             .position = 0,
-            .strings = std.ArrayList([]const u8).init(allocator),
+            .strings = std.ArrayList([]const u8).empty,
         };
     }
 
@@ -180,7 +180,7 @@ pub const Lexer = struct {
         for (l.strings.items) |s| {
             l.allocator.free(s);
         }
-        l.strings.deinit();
+        l.strings.deinit(l.allocator);
         if (!l.repl) {
             l.allocator.free(l.contents);
         }
@@ -680,7 +680,7 @@ fn parseSymbolIdent(lex: *Lexer, ident: []const u8) ![]const u8 {
         }
     }
 
-    try lex.strings.append(newIdent);
+    try lex.strings.append(lex.allocator, newIdent);
     return newIdent;
 }
 
@@ -1273,7 +1273,7 @@ fn string(l: *Lexer) !TokenValue {
 
     str = try l.allocator.realloc(str, count);
     errdefer l.allocator.free(str);
-    try l.strings.append(str);
+    try l.strings.append(l.allocator, str);
 
     quote = l.peek(1);
     if (quote.len != 1 or quote[0] != '"') {

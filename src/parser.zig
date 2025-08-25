@@ -44,13 +44,13 @@ pub const Expression = union(ExpressionTag) {
 
     pub fn deinit(expr: *Expression, allocator: std.mem.Allocator) void {
         switch (expr.*) {
-            ExpressionTag.Vector => |v| {
+            ExpressionTag.Vector => |*v| {
                 for (v.items) |ex| {
                     ex.deinit(allocator);
                 }
-                v.deinit();
+                v.deinit(allocator);
             },
-            ExpressionTag.ByteVector => |bv| bv.deinit(),
+            ExpressionTag.ByteVector => |*bv| bv.deinit(allocator),
             ExpressionTag.QuotedExpression => |qe| allocator.destroy(qe),
             ExpressionTag.QuasiQuotedExpression => |qqe| allocator.destroy(qqe),
             ExpressionTag.UnquotedElement => |uqe| allocator.destroy(uqe),
@@ -194,15 +194,15 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
             }
         },
         lex.TokenTag.VecBegin => {
-            var vec: std.ArrayList(*Expression) = std.ArrayList(*Expression).init(parser.allocator);
+            var vec: std.ArrayList(*Expression) = std.ArrayList(*Expression).empty;
             while (parser.peek().value != lex.TokenTag.RParen) {
                 const val: *Expression = parseExpr(parser, quoted) orelse {
-                    vec.deinit();
+                    vec.deinit(parser.allocator);
                     parser.allocator.destroy(expr);
                     return null;
                 };
-                vec.append(val) catch {
-                    vec.deinit();
+                vec.append(parser.allocator, val) catch {
+                    vec.deinit(parser.allocator);
                     parser.allocator.destroy(expr);
                     parser.allocator.destroy(val);
                     parser.hadError = true;
@@ -213,10 +213,10 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
             expr.* = Expression{ .Vector = vec };
         },
         lex.TokenTag.ByteVectorBegin => {
-            var bv: std.ArrayList(u8) = std.ArrayList(u8).init(parser.allocator);
+            var bv: std.ArrayList(u8) = std.ArrayList(u8).empty;
             while (parser.peek().value != lex.TokenTag.RParen) {
                 const val: *Expression = parseExpr(parser, quoted) orelse {
-                    bv.deinit();
+                    bv.deinit(parser.allocator);
                     parser.allocator.destroy(expr);
                     return null;
                 };
@@ -224,22 +224,22 @@ fn parseExpr(parser: *Parser, quoted: QuoteTag) ?*Expression {
                     ExpressionTag.IntegerLiteral => |num| {
                         parser.allocator.destroy(val);
                         if (num < 0 or num > 255) {
-                            bv.deinit();
+                            bv.deinit(parser.allocator);
                             parser.allocator.destroy(expr);
                             // TODO: wrong token being passed here
                             // should pass non-integer token, not '#u8(' token
                             parser.printError("Invalid element in byte vector", tok);
                             return null;
                         }
-                        bv.append(@intCast(num)) catch {
-                            bv.deinit();
+                        bv.append(parser.allocator, @intCast(num)) catch {
+                            bv.deinit(parser.allocator);
                             parser.allocator.destroy(expr);
                             parser.hadError = true;
                             return null;
                         };
                     },
                     else => {
-                        bv.deinit();
+                        bv.deinit(parser.allocator);
                         parser.allocator.destroy(expr);
                         // TODO: wrong token being passed here
                         // should pass non-integer token, not '#u8(' token
